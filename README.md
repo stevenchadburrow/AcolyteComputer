@@ -1,7 +1,7 @@
 # Acolyte6502Computer
 Acolyte 6502 "Homebrew" Computer with VGA and PS/2 Keyboard support
 
-The ZIP file contains everything needed.  "Rev2" is the latest version, anything else is "Rev1".
+The ZIP file contains everything needed.  "Rev2" is the latest version.
 
 This is a "Homebrew" computer, running a W65C02 Microprocessor at 3.14 MHz.
 It has 80K SRAM, and 128K FlashROM.  There is also 32K write-only memory for VGA output.
