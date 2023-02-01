@@ -1,0 +1,50 @@
+"Oscillators, Chips, and Transistors:",,,,
+1x 25M175,,DIP-8,,Oscillator
+1x W65C02S,,DIP-40,,Processor U1
+1x AS6C1008,,DIP-32,,RAM U2
+1x SST39SF010,,DIP-32,,ROM U3
+1x 74HC161,,DIP-16,,Divider U4
+3x 74HC590,,DIP-16,,"Counter U5,6,7"
+1x 74HC245,,DIP-20,,Transceiver U8
+1x 74HC377,,DIP-20,,Latch U9
+1x 74HC273,,DIP-20,,Output U10
+2x 74HC166,,DIP-16,,"Sh Reg U11,12"
+1x 74HC10,,DIP-14,,NAND3 U13
+1x 74HC00,,DIP-14,,NAND2 U14
+1x 74HC02,,DIP-14,,NOR2 U15
+1x MCP130xD,,TO-92,,Reset U16
+1x 25LCx,,DIP-8,,EEPROM U17
+1x PN2222A,,TO-92,,Transistor Q1
+,,,,
+"Capacitors, Diodes, Resistors:",,,,
+1x 100uF,,5mm Rad,,Electro C1
+1x 10uF,,15mm Ax,,Electro C2
+19x 0.1uF,,5mm Dsc,,Capacitor
+1x LED,,2.2V,,LED
+2x 1N914,,DO-35,,Diode
+1x 1KΩ,,1/4W 5%,,LED Resistor
+2x 15KΩ,,1/4W 5%,,Resistor
+5x 10KΩ,,1/4W 5%,,Resistor
+4x 3.3KΩ,,1/4W 5%,,Resistor
+1x 2.4KΩ,,1/4W 5%,,Resistor
+1x 1.5KΩ,,1/4W 5%,,Resistor
+1x 750Ω,,1/4W 5%,,Resistor
+1x 620Ω,,1/4W 5%,,Resistor
+1x 510Ω,,1/4W 5%,,Resistor
+,,,,
+"Connectors, Jacks, and Switches:",,,,
+1x USB-B,,61729,,Power
+1x Mini DIN-6,,5749266-1,,PS/2
+1x 3.5mm Jck,,SJ1-3513,,Audio
+1x DB15 Fem,,DSub 15,,VGA
+1x MicroSD Apt,,SPI Mod,,SDcard
+1x SPDT 1MS1,,T1B4M7QES,,Switch
+1x Ang Push,,PTS645,,Reset
+1x PinHdr2x20,,2.54mm,,Port
+,,,,
+Optional I/O Expansion Components:,,,,
+1x W65C22S,,DIP-40,,VIA U18
+1x 74HC688,,DIP-20,,Compar U19
+1x 74HC08,,DIP-14,,AND2 U20
+3x 0.1uF,,5mm Dsc,,Capacitor
+2x 10KΩ,,1/4W 5%,,Resistor
