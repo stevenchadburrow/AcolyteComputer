@@ -1338,7 +1338,8 @@ splash_tune_loop
 	INX
 	
 	JSR candle_draw	
-						
+	
+splash_key					
 	JSR inputchar				; this is the loop where we wait for a keypress on splash screen
 	CMP #$00 ; needed!			; get keyboard state, exit only on Escape.
 	BEQ splash_tune_loop
@@ -1348,17 +1349,15 @@ splash_tune_loop
 	BEQ splash_easter_egg
 	CMP #$15 ; F12
 	BEQ splash_credits
-
 	; any other key here
-
-	JMP splash_tune_loop
+	JMP splash_key
 splash_credits
 	LDA #$A5
 	JMP easter_egg 				; needs a JMP here, because we are not coming back
 splash_easter_egg
 	LDA #$FF
 	JSR easter_egg
-	JMP splash_tune_loop
+	JMP splash_key
 splash_exit
 	RTS
 
