@@ -1335,7 +1335,10 @@ splash_tune_loop
 	JSR tune
 	LDA #$00
 	JSR tune
-	INX						
+	INX
+	
+	JSR candle_draw	
+						
 	JSR inputchar				; this is the loop where we wait for a keypress on splash screen
 	CMP #$00 ; needed!			; get keyboard state, exit only on Escape.
 	BEQ splash_tune_loop
@@ -1344,7 +1347,12 @@ splash_tune_loop
 	CMP #$16 ; F9
 	BEQ splash_easter_egg
 	CMP #$15 ; F12
-	BNE splash_tune_loop
+	BEQ splash_credits
+
+	; any other key here
+
+	JMP splash_tune_loop
+splash_credits
 	LDA #$A5
 	JMP easter_egg 				; needs a JMP here, because we are not coming back
 splash_easter_egg
@@ -3779,68 +3787,198 @@ intruder_enemy_data4
 	.BYTE $00,$05,$50,$05,$50,$00
 
 
+	.ORG $EC00
 
-;	LDA #$02
-;	STA printchar_x
-;	LDA #$0C
-;	STA printchar_y
-;	LDA #"4"
-;	JSR printchar
-;	LDA #"K"
-;	JSR printchar
-;	LDA #"B"
-;	JSR printchar
-;	LDA #" "
-;	JSR printchar
-;	LDA #"E"
-;	JSR printchar
-;	LDA #"x"
-;	JSR printchar
-;	LDA #"t"
-;	JSR printchar
-;	LDA #"r"
-;	JSR printchar
-;	LDA #"a"
-;	JSR printchar
-;	
-;	LDA #$02
-;	STA printchar_x
-;	LDA #$10
-;	STA printchar_y
-;	LDA #"E"
-;	JSR printchar
-;	LDA #"S"
-;	JSR printchar
-;	LDA #"C"
-;	JSR printchar
-;	LDA #" "
-;	JSR printchar
-;	LDA #"t"
-;	JSR printchar
-;	LDA #"o"
-;	JSR printchar
-;	LDA #" "
-;	JSR printchar
-;	LDA #"E"
-;	JSR printchar
-;	LDA #"x"
-;	JSR printchar
-;	LDA #"i"
-;	JSR printchar
-;	LDA #"t"
-;	JSR printchar
-;	
-;intruder_loop
-;	JSR inputchar
-;	CMP #$00
-;	BEQ intruder_loop
-;	CMP #$1B
-;	BEQ intruder_exit
-;	JMP intruder_loop
-;
-;intruder_exit
-;	LDA #$80 ; from main_start
-;	JMP $FFE0 ; switch banks
+candle_draw
+	JSR basic_sub_random
+	AND #%11000000
+	BEQ candle_draw_left_type
+	LDA #<candle_data2
+	STA sub_read+1
+	LDA #>candle_data2
+	STA sub_read+2
+	JMP candle_draw_left_location
+candle_draw_left_type
+	LDA #<candle_data1
+	STA sub_read+1
+	LDA #>candle_data1
+	STA sub_read+2
+	JMP candle_draw_left_location
+candle_draw_left_location
+	LDA #$12
+	STA sub_write+1
+	LDA #$2A
+	STA sub_write+2
+candle_draw_left_loop
+	JSR sub_read
+	JSR sub_write
+	INC sub_read+1
+	BNE candle_draw_left_next
+	INC sub_read+2
+candle_draw_left_next
+	INC sub_write+1
+	LDA sub_write+1
+	CMP #$19
+	BNE candle_draw_left_check
+	LDA #$92
+	STA sub_write+1
+	JMP candle_draw_left_loop
+candle_draw_left_check
+	CMP #$99
+	BNE candle_draw_left_loop
+	LDA #$12
+	STA sub_write+1
+	INC sub_write+2
+	LDA sub_write+2
+	CMP #$37
+	BNE candle_draw_left_loop
+
+	JSR basic_sub_random
+	AND #%11000000
+	BEQ candle_draw_right_type
+	LDA #<candle_data4
+	STA sub_read+1
+	LDA #>candle_data4
+	STA sub_read+2
+	JMP candle_draw_right_location
+candle_draw_right_type
+	LDA #<candle_data3
+	STA sub_read+1
+	LDA #>candle_data3
+	STA sub_read+2
+	JMP candle_draw_right_location
+candle_draw_right_location
+	LDA #$2F
+	STA sub_write+1
+	LDA #$2A
+	STA sub_write+2
+candle_draw_right_loop
+	JSR sub_read
+	JSR sub_write
+	INC sub_read+1
+	BNE candle_draw_right_next
+	INC sub_read+2
+candle_draw_right_next
+	INC sub_write+1
+	LDA sub_write+1
+	CMP #$36
+	BNE candle_draw_right_check
+	LDA #$AF
+	STA sub_write+1
+	JMP candle_draw_right_loop
+candle_draw_right_check
+	CMP #$B6
+	BNE candle_draw_right_loop
+	LDA #$2F
+	STA sub_write+1
+	INC sub_write+2
+	LDA sub_write+2
+	CMP #$37
+	BNE candle_draw_right_loop
+	RTS
+	
+
+
+candle_data1
+	.BYTE $00,$00,$00,$AA,$A0,$00,$00,$00
+	.BYTE $00,$2A,$AA,$AA,$80,$00,$00,$00
+	.BYTE $AA,$80,$2A,$A0,$00,$00,$02,$A0
+	.BYTE $00,$00,$A8,$00,$00,$0A,$80,$02
+	.BYTE $00,$2A,$00,$00,$2A,$00,$02,$00
+	.BYTE $0A,$80,$00,$28,$00,$0A,$00,$02
+	.BYTE $80,$00,$A8,$00,$0A,$00,$02,$A0
+	.BYTE $00,$A0,$00,$0A,$00,$00,$A0,$02
+	.BYTE $A0,$00,$0A,$80,$00,$A8,$02,$80
+	.BYTE $00,$2A,$A0,$00,$28,$02,$80,$00
+	.BYTE $AA,$A0,$00,$28,$02,$80,$00,$AA
+	.BYTE $A0,$00,$28,$02,$80,$00,$AA,$A0
+	.BYTE $00,$28,$02,$80,$00,$AA,$A0,$00
+	.BYTE $28,$02,$80,$00,$AA,$A0,$00,$28
+	.BYTE $02,$A0,$00,$AA,$A0,$00,$A0,$00
+	.BYTE $A0,$00,$2A,$80,$00,$A0,$00,$A8
+	.BYTE $00,$02,$00,$02,$A0,$00,$28,$00
+	.BYTE $00,$00,$02,$80,$00,$2A,$00,$00
+	.BYTE $00,$0A,$80,$00,$0A,$80,$00,$00
+	.BYTE $2A,$00,$00,$02,$A0,$00,$00,$A8
+	.BYTE $00,$00,$00,$A0,$FF,$C2,$A0,$00
+	.BYTE $00,$00,$20,$FF,$C2,$80,$00,$00
+	.BYTE $00,$00,$FF,$C0,$00,$00
+
+candle_data2
+	.BYTE $00,$00,$00,$AA,$A0,$00,$00,$00
+	.BYTE $00,$2A,$AA,$AA,$80,$00,$00,$00
+	.BYTE $AA,$80,$2A,$A0,$00,$00,$02,$A0
+	.BYTE $00,$00,$A8,$00,$00,$0A,$80,$20
+	.BYTE $00,$2A,$00,$00,$2A,$00,$20,$00
+	.BYTE $0A,$80,$00,$28,$00,$28,$00,$02
+	.BYTE $80,$00,$A8,$00,$28,$00,$02,$A0
+	.BYTE $00,$A0,$00,$28,$00,$00,$A0,$02
+	.BYTE $A0,$00,$A8,$00,$00,$A8,$02,$80
+	.BYTE $02,$AA,$00,$00,$28,$02,$80,$02
+	.BYTE $AA,$80,$00,$28,$02,$80,$02,$AA
+	.BYTE $80,$00,$28,$02,$80,$02,$AA,$80
+	.BYTE $00,$28,$02,$80,$02,$AA,$80,$00
+	.BYTE $28,$02,$80,$02,$AA,$80,$00,$28
+	.BYTE $02,$A0,$02,$AA,$80,$00,$A0,$00
+	.BYTE $A0,$00,$AA,$00,$00,$A0,$00,$A8
+	.BYTE $00,$20,$00,$02,$A0,$00,$28,$00
+	.BYTE $00,$00,$02,$80,$00,$2A,$00,$00
+	.BYTE $00,$0A,$80,$00,$0A,$80,$00,$00
+	.BYTE $2A,$00,$00,$02,$A0,$00,$00,$A8
+	.BYTE $00,$00,$00,$A0,$FF,$C2,$A0,$00
+	.BYTE $00,$00,$20,$FF,$C2,$80,$00,$00
+	.BYTE $00,$00,$FF,$C0,$00,$00
+
+candle_data3
+	.BYTE $00,$00,$0A,$AA,$00,$00,$00,$00
+	.BYTE $02,$AA,$AA,$A8,$00,$00,$00,$0A
+	.BYTE $A8,$02,$AA,$00,$00,$00,$2A,$00
+	.BYTE $00,$0A,$80,$00,$00,$A8,$02,$00
+	.BYTE $02,$A0,$00,$02,$A0,$02,$00,$00
+	.BYTE $A8,$00,$02,$80,$02,$80,$00,$28
+	.BYTE $00,$0A,$80,$02,$80,$00,$2A,$00
+	.BYTE $0A,$00,$02,$80,$00,$0A,$00,$2A
+	.BYTE $00,$0A,$80,$00,$0A,$80,$28,$00
+	.BYTE $2A,$A0,$00,$02,$80,$28,$00,$2A
+	.BYTE $A8,$00,$02,$80,$28,$00,$2A,$A8
+	.BYTE $00,$02,$80,$28,$00,$2A,$A8,$00
+	.BYTE $02,$80,$28,$00,$2A,$A8,$00,$02
+	.BYTE $80,$28,$00,$2A,$A8,$00,$02,$80
+	.BYTE $2A,$00,$2A,$A8,$00,$0A,$80,$0A
+	.BYTE $00,$0A,$A0,$00,$0A,$00,$0A,$80
+	.BYTE $02,$00,$00,$2A,$00,$02,$80,$00
+	.BYTE $00,$00,$28,$00,$02,$A0,$00,$00
+	.BYTE $00,$A8,$00,$00,$A8,$00,$00,$02
+	.BYTE $A0,$00,$00,$2A,$00,$00,$0A,$80
+	.BYTE $00,$00,$0A,$0F,$FC,$2A,$00,$00
+	.BYTE $00,$02,$0F,$FC,$28,$00,$00,$00
+	.BYTE $00,$0F,$FC,$00,$00,$00
+
+candle_data4
+	.BYTE $00,$00,$0A,$AA,$00,$00,$00,$00
+	.BYTE $02,$AA,$AA,$A8,$00,$00,$00,$0A
+	.BYTE $A8,$02,$AA,$00,$00,$00,$2A,$00
+	.BYTE $00,$0A,$80,$00,$00,$A8,$00,$20
+	.BYTE $02,$A0,$00,$02,$A0,$00,$20,$00
+	.BYTE $A8,$00,$02,$80,$00,$A0,$00,$28
+	.BYTE $00,$0A,$80,$00,$A0,$00,$2A,$00
+	.BYTE $0A,$00,$00,$A0,$00,$0A,$00,$2A
+	.BYTE $00,$00,$A8,$00,$0A,$80,$28,$00
+	.BYTE $02,$AA,$00,$02,$80,$28,$00,$0A
+	.BYTE $AA,$00,$02,$80,$28,$00,$0A,$AA
+	.BYTE $00,$02,$80,$28,$00,$0A,$AA,$00
+	.BYTE $02,$80,$28,$00,$0A,$AA,$00,$02
+	.BYTE $80,$28,$00,$0A,$AA,$00,$02,$80
+	.BYTE $2A,$00,$0A,$AA,$00,$0A,$80,$0A
+	.BYTE $00,$02,$A8,$00,$0A,$00,$0A,$80
+	.BYTE $00,$20,$00,$2A,$00,$02,$80,$00
+	.BYTE $00,$00,$28,$00,$02,$A0,$00,$00
+	.BYTE $00,$A8,$00,$00,$A8,$00,$00,$02
+	.BYTE $A0,$00,$00,$2A,$00,$00,$0A,$80
+	.BYTE $00,$00,$0A,$0F,$FC,$2A,$00,$00
+	.BYTE $00,$02,$0F,$FC,$28,$00,$00,$00
+	.BYTE $00,$0F,$FC,$00,$00,$00
+
 
 
 	.ORG $F000
