@@ -27,6 +27,12 @@
 ; D5 = BANK-B
 ; D6 = BANK-C
 ; D7 = AUDIO-OUT
+; Writing to ROM also writes to RAM if the RAM is fast enough.
+; This is not a problem when using the 128KB RAM, but when using
+; only 32KB of RAM, it would show anything written to ROM in 
+; the RAM space given.  So, when writing to ROM for output,
+; make sure to write to $FFFF which is off-screen and is not 
+; expected to be used.
 
 ; Input is through interrupts and /SO
 ; /IRQ = KEY-CLK
@@ -60,6 +66,7 @@ ps2_delete		.EQU $71
 ps2_home		.EQU $6C
 ps2_end			.EQU $69
 ps2_slash		.EQU $4A
+ps2_space		.EQU $29
 ps2_f1			.EQU $05
 ps2_f2			.EQU $06
 ps2_f3			.EQU $04
@@ -161,18 +168,18 @@ jump_vector_irq		.EQU $0398
 
 ; 48 bytes unused
 
-game_score_low		.EQU $03D0
-game_score_high		.EQU $03D1
-game_piece		.EQU $03D2
-game_piece_next		.EQU $03D3
-game_location		.EQU $03D4
-game_cycle		.EQU $03D5
-game_speed		.EQU $03D6
-game_overscan		.EQU $03D7
+tetra_score_low		.EQU $03D0
+tetra_score_high		.EQU $03D1
+tetra_piece		.EQU $03D2
+tetra_piece_next		.EQU $03D3
+tetra_location		.EQU $03D4
+tetra_cycle		.EQU $03D5
+tetra_speed		.EQU $03D6
+tetra_overscan		.EQU $03D7
 
 command_array		.EQU $03D8 ; 40 characters til end
 
-game_field		.EQU $0400 ; shared with sdcard_memory
+tetra_field		.EQU $0400 ; shared with sdcard_memory
 
 screen 			.EQU $0800
 
@@ -238,14 +245,14 @@ zero_loop
 	STZ key_speed
 
 ;	LDA #%00001100		; set output pins
-;	STA $C000
+;	STA $FFFF
 
 ;	LDA #%01111111		; clears interrupt flags
 ;	STA via_ifr
 ;	STZ via_ier
 
 ;	LDA #%10001100		; set output pins
-;	STA $C000
+;	STA $FFFF
 
 ;	LDA #%01111111		; clears interrupt flags
 ;	STA via_ifr
@@ -255,25 +262,25 @@ zero_loop
 
 	LDA #%00001100		; set output pins
 	STA output_byte
-	STA $C000
+	STA $FFFF
 
+	; comment these accordingly when simulating
 	LDA #$FF
 	STA command_data
-	; comment this next line when simulating
 	JMP main_initialize	
 
 game_jump
 	STA command_data
 	AND #%00000001
 	BEQ game_tetra
-	JMP game_extra
+	JMP game_intruder
 
 game_tetra
 	LDA #$00
 	STA command_data
 	JMP main_initialize
 
-game_extra
+game_intruder
 	LDA #$01
 	STA command_data
 
@@ -338,6 +345,29 @@ main_initialize
 	;LDA #$60 ; RTS
 	;STA basic_sub_random+$10
 
+
+	LDX #$10			; creates basic_sub_random	
+random_loop
+	LDA random_code,X
+	STA basic_sub_random,X
+	DEX
+	CPX #$FF
+	BNE random_loop
+
+	JMP random_exit
+
+random_code
+	.BYTE $AD
+	.WORD basic_sub_random_var
+	.BYTE $2A,$18,$2A,$18,$6D
+	.WORD basic_sub_random_var
+	.BYTE $18,$69,$11,$8D
+	.WORD basic_sub_random_var
+	.BYTE $60
+
+random_exit
+
+
 	STZ sub_write+1				; clear out all system and screen RAM 
 	LDA #$04
 	STA sub_write+2
@@ -355,9 +385,9 @@ wipeout_loop
 	STZ printchar_invert
 
 	LDA command_data
-	BEQ game_initialize
+	BEQ tetra_initialize
 	BMI detect_start
-	JMP extra
+	JMP intruder
 
 detect_start
 	;JMP detect_splash ; uncomment when simulating the splash screen
@@ -388,273 +418,273 @@ detect_splash
 	JMP $FFE0 ; jump to other bank
 
 
-game_initialize
+tetra_initialize
 	STZ sub_write+1
 	LDA #$08
 	STA sub_write+2
-game_init_loop
+tetra_init_loop
 	LDA #$AA ; fill color
 	JSR sub_write
 	INC sub_write+1
 	LDA sub_write+1
 	CMP #$38
-	BEQ game_init_loop_inc1
+	BEQ tetra_init_loop_inc1
 	CMP #$B8
-	BEQ game_init_loop_inc2
-	JMP game_init_loop
-game_init_loop_inc1
+	BEQ tetra_init_loop_inc2
+	JMP tetra_init_loop
+tetra_init_loop_inc1
 	LDA #$80
 	STA sub_write+1
-	JMP game_init_loop
-game_init_loop_inc2
+	JMP tetra_init_loop
+tetra_init_loop_inc2
 	STZ sub_write+1
 	INC sub_write+2
 	LDA sub_write+2
 	CMP #$80
-	BNE game_init_loop
+	BNE tetra_init_loop
 
-game_random
+tetra_random
 	CLC
 	JSR basic_sub_random
 	AND #%00011100
-	BEQ game_initialize
-	STA game_piece_next
-	STZ game_score_low
-	STZ game_score_high
-	STZ game_cycle
+	BEQ tetra_initialize
+	STA tetra_piece_next
+	STZ tetra_score_low
+	STZ tetra_score_high
+	STZ tetra_cycle
 	LDA #$FF
-	STA game_speed
+	STA tetra_speed
 	LDX #$00
-game_field_loop
-	STZ game_field,X
+tetra_field_loop
+	STZ tetra_field,X
 	INX
-	BNE game_field_loop
+	BNE tetra_field_loop
 
-game_start
+tetra_start
 	CLC
 	JSR basic_sub_random
 	AND #%00011100
-	BEQ game_start
+	BEQ tetra_start
 	PHA
-	LDA game_piece_next
-	STA game_piece
+	LDA tetra_piece_next
+	STA tetra_piece
 	PLA
-	STA game_piece_next
+	STA tetra_piece_next
 	LDA #$06 
-	STA game_location
-	JSR game_display
-	JSR game_clear
-	JSR game_place
-	JSR game_draw
+	STA tetra_location
+	JSR tetra_display
+	JSR tetra_clear
+	JSR tetra_place
+	JSR tetra_draw
 	LDX #$00
-game_loop
+tetra_loop
 	INX
-	BNE game_continue
-	INC game_cycle
-	LDA game_cycle
-	CMP game_speed 
-	BEQ game_down
-	JMP game_loop
-game_continue
+	BNE tetra_continue
+	INC tetra_cycle
+	LDA tetra_cycle
+	CMP tetra_speed 
+	BEQ tetra_down
+	JMP tetra_loop
+tetra_continue
 	JSR inputchar
 	CMP #$00 ; needed
-	BEQ game_loop
+	BEQ tetra_loop
 	PHA
 	CLC
 	JSR basic_sub_random ; to add some randomization
 	PLA
-	CMP #$1F ; F4
-	BNE game_next1
-	LDA key_alt_control
-	BEQ game_next1
+	CMP #$1B ; escape
+	BNE tetra_next1
+	;LDA key_alt_control
+	;BEQ tetra_next1
 	LDA #$80 ; from main_start
 	JMP $FFE0 ; switch banks
-game_next1
-	CMP #$0C ; F5
-	BNE game_next2
-	LDA key_alt_control
-	BEQ game_next2
-	JMP game_initialize
-game_next2
+tetra_next1
+	CMP #$15 ; F12
+	BNE tetra_next2
+	;LDA key_alt_control
+	;BEQ tetra_next2
+	JMP tetra_initialize
+tetra_next2
 	CMP #"w" ; up
-	BEQ game_up
+	BEQ tetra_up
 	CMP #"W"
-	BEQ game_up
+	BEQ tetra_up
 	CMP #$11 ; arrow up
-	BEQ game_up
+	BEQ tetra_up
 	CMP #"8"
-	BEQ game_up
-	JMP game_controls1
-game_up
+	BEQ tetra_up
+	JMP tetra_controls1
+tetra_up
 	LDX #$00
-	STZ game_cycle
-	JMP game_controls11
-game_controls1
+	STZ tetra_cycle
+	JMP tetra_controls11
+tetra_controls1
 	CMP #"s" ; down
-	BEQ game_down
+	BEQ tetra_down
 	CMP #"S"
-	BEQ game_down
+	BEQ tetra_down
 	CMP #$12 ; arrow down
-	BEQ game_down
+	BEQ tetra_down
 	CMP #"2"
-	BEQ game_down
-	JMP game_controls3
-game_down
+	BEQ tetra_down
+	JMP tetra_controls3
+tetra_down
 	LDX #$00
-	STZ game_cycle
-	LDA game_location
+	STZ tetra_cycle
+	LDA tetra_location
 	CLC
 	ADC #$10
-	STA game_location
-	JSR game_clear
-	JSR game_place
+	STA tetra_location
+	JSR tetra_clear
+	JSR tetra_place
 	CMP #$FF ; error
-	BEQ game_controls2
-	JMP game_controls11
-game_controls2
-	LDA game_location
+	BEQ tetra_controls2
+	JMP tetra_controls11
+tetra_controls2
+	LDA tetra_location
 	SEC
 	SBC #$10
-	STA game_location
-	JSR game_clear
-	JSR game_place
-	JSR game_solid
-	JSR game_lines
-	JSR game_display
-	JSR game_draw
-	JMP game_start
-game_controls3
+	STA tetra_location
+	JSR tetra_clear
+	JSR tetra_place
+	JSR tetra_solid
+	JSR tetra_lines
+	JSR tetra_display
+	JSR tetra_draw
+	JMP tetra_start
+tetra_controls3
 	CMP #"a" ; left
-	BEQ game_left
+	BEQ tetra_left
 	CMP #"A"
-	BEQ game_left
+	BEQ tetra_left
 	CMP #$13 ; arrow left
-	BEQ game_left
+	BEQ tetra_left
 	CMP #"4"
-	BEQ game_left
-	JMP game_controls5
-game_left
-	DEC game_location
-	JSR game_clear
-	JSR game_place
+	BEQ tetra_left
+	JMP tetra_controls5
+tetra_left
+	DEC tetra_location
+	JSR tetra_clear
+	JSR tetra_place
 	CMP #$FF ; error
-	BEQ game_controls4
-	JMP game_controls11
-game_controls4
-	INC game_location
-	JSR game_clear
-	JSR game_place
-	JMP game_controls11
-game_controls5
+	BEQ tetra_controls4
+	JMP tetra_controls11
+tetra_controls4
+	INC tetra_location
+	JSR tetra_clear
+	JSR tetra_place
+	JMP tetra_controls11
+tetra_controls5
 	CMP #"d" ; right
-	BEQ game_right
+	BEQ tetra_right
 	CMP #"D"
-	BEQ game_right
+	BEQ tetra_right
 	CMP #$14 ; arrow right
-	BEQ game_right
+	BEQ tetra_right
 	CMP #"6"
-	BEQ game_right
-	JMP game_controls7
-game_right
-	INC game_location
-	JSR game_clear
-	JSR game_place
+	BEQ tetra_right
+	JMP tetra_controls7
+tetra_right
+	INC tetra_location
+	JSR tetra_clear
+	JSR tetra_place
 	CMP #$FF ; error
-	BEQ game_controls6
-	JMP game_controls11
-game_controls6
-	DEC game_location
-	JSR game_clear
-	JSR game_place
-	JMP game_controls11
-game_controls7
+	BEQ tetra_controls6
+	JMP tetra_controls11
+tetra_controls6
+	DEC tetra_location
+	JSR tetra_clear
+	JSR tetra_place
+	JMP tetra_controls11
+tetra_controls7
 	CMP #"q" ; rotate ccw
-	BEQ game_rotate_ccw
+	BEQ tetra_rotate_ccw
 	CMP #"Q"
-	BEQ game_rotate_ccw
+	BEQ tetra_rotate_ccw
 	CMP #$20 ; space
-	BEQ game_rotate_ccw
+	BEQ tetra_rotate_ccw
 	CMP #"7"
-	BEQ game_rotate_ccw
-	JMP game_controls9
-game_rotate_ccw
-	LDA game_piece
+	BEQ tetra_rotate_ccw
+	JMP tetra_controls9
+tetra_rotate_ccw
+	LDA tetra_piece
 	TAY
 	PHA
 	AND #%00011100
-	STA game_piece
+	STA tetra_piece
 	PLA
 	INC A
 	AND #%00000011
-	ORA game_piece
-	STA game_piece
-	JSR game_clear
-	JSR game_place
+	ORA tetra_piece
+	STA tetra_piece
+	JSR tetra_clear
+	JSR tetra_place
 	CMP #$FF ; error
-	BEQ game_controls8
-	JMP game_controls11
-game_controls8
-	STY game_piece
-	JSR game_clear
-	JSR game_place
-	JMP game_controls11
-game_controls9
+	BEQ tetra_controls8
+	JMP tetra_controls11
+tetra_controls8
+	STY tetra_piece
+	JSR tetra_clear
+	JSR tetra_place
+	JMP tetra_controls11
+tetra_controls9
 	CMP #"e" ; rotate cw
-	BEQ game_rotate_cw
+	BEQ tetra_rotate_cw
 	CMP #"E"
-	BEQ game_rotate_cw
+	BEQ tetra_rotate_cw
 	CMP #"0" ; rotate cw
-	BEQ game_rotate_cw
+	BEQ tetra_rotate_cw
 	CMP #"9"
-	BEQ game_rotate_cw
-	JMP game_controls11
-game_rotate_cw
-	LDA game_piece
+	BEQ tetra_rotate_cw
+	JMP tetra_controls11
+tetra_rotate_cw
+	LDA tetra_piece
 	TAY
 	PHA
 	AND #%00011100
-	STA game_piece
+	STA tetra_piece
 	PLA
 	DEC A
 	AND #%00000011
-	ORA game_piece
-	STA game_piece
-	JSR game_clear
-	JSR game_place
+	ORA tetra_piece
+	STA tetra_piece
+	JSR tetra_clear
+	JSR tetra_place
 	CMP #$FF ; error
-	BEQ game_controls10
-	JMP game_controls11
-game_controls10
-	STY game_piece
-	JSR game_clear
-	JSR game_place
-game_controls11
-	JSR game_draw
-	JMP game_loop
+	BEQ tetra_controls10
+	JMP tetra_controls11
+tetra_controls10
+	STY tetra_piece
+	JSR tetra_clear
+	JSR tetra_place
+tetra_controls11
+	JSR tetra_draw
+	JMP tetra_loop
 
 
-game_clear
+tetra_clear
 	PHA
 	PHX
 	LDX #$00
-game_clear_loop
-	LDA game_field,X
+tetra_clear_loop
+	LDA tetra_field,X
 	CMP #$FF
-	BNE game_clear_increment
-	STZ game_field,X
-game_clear_increment
+	BNE tetra_clear_increment
+	STZ tetra_field,X
+tetra_clear_increment
 	INX
-	BNE game_clear_loop
+	BNE tetra_clear_loop
 	PLX
 	PLA
 	RTS
 
 
-game_place
-	STZ game_overscan
+tetra_place
+	STZ tetra_overscan
 	PHX
 	PHY
-	LDA game_piece
+	LDA tetra_piece
 	AND #%00011111
 	CLC
 	ROL A
@@ -662,81 +692,81 @@ game_place
 	ROL A
 	ROL A
 	TAX
-	BCS game_place_second
-	LDA #<game_piece_data_first
+	BCS tetra_place_second
+	LDA #<tetra_piece_data_first
 	STA sub_index+1
-	LDA #>game_piece_data_first
+	LDA #>tetra_piece_data_first
 	STA sub_index+2
-	JMP game_place_ready
-game_place_second
-	LDA #<game_piece_data_second
+	JMP tetra_place_ready
+tetra_place_second
+	LDA #<tetra_piece_data_second
 	STA sub_index+1
-	LDA #>game_piece_data_second
+	LDA #>tetra_piece_data_second
 	STA sub_index+2
-game_place_ready
-	LDY game_location
+tetra_place_ready
+	LDY tetra_location
 	STZ command_addr1_high
 	STZ command_addr1_low
-game_place_loop
+tetra_place_loop
 	JSR sub_index
 	CMP #$00 ; needed
-	BEQ game_place_skip
-	LDA game_overscan
-	BNE game_place_error
+	BEQ tetra_place_skip
+	LDA tetra_overscan
+	BNE tetra_place_error
 	TYA
 	AND #%00001111
 	CLC
 	CMP #$03
-	BCC game_place_error
+	BCC tetra_place_error
 	CLC
 	CMP #$0D
-	BCS game_place_error	
-	LDA game_field,Y
-	BEQ game_place_write
-game_place_error
+	BCS tetra_place_error	
+	LDA tetra_field,Y
+	BEQ tetra_place_write
+tetra_place_error
 	PLY
 	PLX
 	LDA #$FF ; error
 	RTS
-game_place_write
+tetra_place_write
 	JSR sub_index
-	STA game_field,Y
-game_place_skip
+	STA tetra_field,Y
+tetra_place_skip
 	INX
 	INY
 	INC command_addr1_low
 	LDA command_addr1_low
 	CMP #$04
-	BNE game_place_loop
+	BNE tetra_place_loop
 	TYA
 	CLC
 	ADC #$0C
-	ROL game_overscan
+	ROL tetra_overscan
 	TAY
 	STZ command_addr1_low
 	INC command_addr1_high
 	LDA command_addr1_high
 	CMP #$04
-	BNE game_place_loop
+	BNE tetra_place_loop
 	PLY
 	PLX
 	LDA #$00 ; good
 	RTS
 
 
-game_solid
+tetra_solid
 	PHA
 	PHX
 	LDX #$00
-game_solid_loop
-	LDA game_field,X
+tetra_solid_loop
+	LDA tetra_field,X
 	CMP #$FF
-	BNE game_solid_increment
+	BNE tetra_solid_increment
 	LDA #$55 ; blue
-	STA game_field,X
-game_solid_increment
+	STA tetra_field,X
+tetra_solid_increment
 	INX
-	BNE game_solid_loop
+	BNE tetra_solid_loop
 	LDA #$00 ; clear
 	JSR easter_egg
 	PLX
@@ -744,87 +774,87 @@ game_solid_increment
 	RTS
 
 
-game_lines
+tetra_lines
 	STZ command_data
 	PHA
 	PHX
 	PHY
 	LDX #$00
 	LDY #$00
-game_lines_loop
-	LDA game_field,X
+tetra_lines_loop
+	LDA tetra_field,X
 	CMP #$55 ; blue
-	BNE game_lines_check
+	BNE tetra_lines_check
 	INY
-game_lines_check
+tetra_lines_check
 	TXA
 	AND #%00001111
 	CMP #$0F
-	BNE game_lines_increment
+	BNE tetra_lines_increment
 	CPY #$0A ; 10 columns
-	BEQ game_lines_remove
+	BEQ tetra_lines_remove
 	LDY #$00
-	JMP game_lines_increment
-game_lines_remove
+	JMP tetra_lines_increment
+tetra_lines_remove
 	INC command_data
-	INC game_score_low
-	LDA game_score_low
+	INC tetra_score_low
+	LDA tetra_score_low
 	AND #%00001111
-	BNE game_lines_remove_score
-	LDA game_speed
+	BNE tetra_lines_remove_score
+	LDA tetra_speed
 	SEC
 	SBC #$10
-	STA game_speed
-	INC game_score_high
-game_lines_remove_score
+	STA tetra_speed
+	INC tetra_score_high
+tetra_lines_remove_score
 	TXA
 	AND #%11110000
 	TAX
-game_lines_remove_loop
-	STZ game_field,X
+tetra_lines_remove_loop
+	STZ tetra_field,X
 	INX
 	TXA
 	AND #%00001111
 	CMP #$0F
-	BNE game_lines_remove_loop
+	BNE tetra_lines_remove_loop
 	PHX
 	TXA
 	SEC
 	SBC #$10
 	TAY
-game_lines_remove_shift
-	LDA game_field,Y
-	STA game_field,X
+tetra_lines_remove_shift
+	LDA tetra_field,Y
+	STA tetra_field,X
 	DEX
 	DEY
-	BNE game_lines_remove_shift
+	BNE tetra_lines_remove_shift
 	LDX #$00
-game_lines_remove_clear
-	STZ game_field,X
+tetra_lines_remove_clear
+	STZ tetra_field,X
 	INX
 	TXA
 	AND #%00001111
 	CMP #$0F
-	BNE game_lines_remove_clear
+	BNE tetra_lines_remove_clear
 	PLX
 	LDY #$00
-game_lines_increment
+tetra_lines_increment
 	INX
-	BNE game_lines_loop
+	BNE tetra_lines_loop
 	LDA command_data
-	BEQ game_lines_exit
+	BEQ tetra_lines_exit
 	CMP #$04
-	BNE game_lines_exit
+	BNE tetra_lines_exit
 	LDA #$FF ; draw
 	JSR easter_egg	
-game_lines_exit
+tetra_lines_exit
 	PLY
 	PLX
 	PLA
 	RTS
 
 
-game_draw	
+tetra_draw	
 	PHA
 	PHX
 	PHY
@@ -834,34 +864,34 @@ game_draw
 	STA sub_write+2
 	LDX #$00
 	LDY #$00
-game_draw_loop
+tetra_draw_loop
 	TXA
 	AND #%00001111
 	CLC	
 	CMP #$03
-	BCC game_draw_jump
+	BCC tetra_draw_jump
 	CLC	
 	CMP #$0D
-	BCS game_draw_jump
-	JMP game_draw_continue
-game_draw_jump
-	JMP game_draw_increment
-game_draw_continue
-	LDA game_field,X
+	BCS tetra_draw_jump
+	JMP tetra_draw_continue
+tetra_draw_jump
+	JMP tetra_draw_increment
+tetra_draw_continue
+	LDA tetra_field,X
 	CPY #$00
-	BNE game_draw_corner1
+	BNE tetra_draw_corner1
 	AND #%01010101
-	JMP game_draw_corner2
-game_draw_corner1
+	JMP tetra_draw_corner2
+tetra_draw_corner1
 	AND #%01111111
-game_draw_corner2
+tetra_draw_corner2
 	JSR sub_write
 	INC sub_write+1
-	LDA game_field,X
+	LDA tetra_field,X
 	CPY #$00
-	BNE game_draw_normal
+	BNE tetra_draw_normal
 	AND #%01010101
-game_draw_normal
+tetra_draw_normal
 	JSR sub_write
 	INC sub_write+1
 	JSR sub_write
@@ -872,11 +902,11 @@ game_draw_normal
 	CLC
 	ADC #$7C
 	STA sub_write+1
-	LDA game_field,X
+	LDA tetra_field,X
 	AND #%01111111
 	JSR sub_write
 	INC sub_write+1
-	LDA game_field,X
+	LDA tetra_field,X
 	JSR sub_write
 	INC sub_write+1
 	JSR sub_write
@@ -890,7 +920,7 @@ game_draw_normal
 	INC sub_write+2
 	INY
 	CPY #$07
-	BNE game_draw_loop
+	BNE tetra_draw_loop
 	LDY #$00
 	LDA sub_write+2
 	SEC
@@ -900,29 +930,29 @@ game_draw_normal
 	CLC
 	ADC #$04
 	STA sub_write+1
-game_draw_increment
+tetra_draw_increment
 	INX
-	BEQ game_draw_exit
+	BEQ tetra_draw_exit
 	TXA
 	AND #%00001111
-	BEQ game_draw_shift
-	JMP game_draw_loop
-game_draw_shift
+	BEQ tetra_draw_shift
+	JMP tetra_draw_loop
+tetra_draw_shift
 	LDA #$08 ; start of playfield
 	STA sub_write+1
 	LDA sub_write+2
 	CLC
 	ADC #$07 ; change this
 	STA sub_write+2
-	JMP game_draw_loop
-game_draw_exit
+	JMP tetra_draw_loop
+tetra_draw_exit
 	PLY
 	PLX
 	PLA
 	RTS
 
 
-game_display
+tetra_display
 	PHA
 	PHX
 
@@ -957,7 +987,7 @@ game_display
 	JSR printchar
 	LDA #" "
 	JSR printchar
-	LDX game_score_high
+	LDX tetra_score_high
 	LDA decimal_conversion_high,X
 	JSR printchar
 	LDA decimal_conversion_middle,X
@@ -984,7 +1014,7 @@ game_display
 	JSR printchar
 	LDA #" "
 	JSR printchar
-	LDX game_score_low
+	LDX tetra_score_low
 	LDA decimal_conversion_high,X
 	JSR printchar
 	LDA decimal_conversion_middle,X
@@ -1009,66 +1039,58 @@ game_display
 	JSR printchar
 	LDA #" "
 	JSR printchar
-	LDA game_piece_next
+	LDA tetra_piece_next
 	AND #%00011100
 	ROR A
 	ROR A
 	CMP #$01 ; I
-	BNE game_display_next1
+	BNE tetra_display_next1
 	LDA #"I"
-	JMP game_display_exit
-game_display_next1
+	JMP tetra_display_exit
+tetra_display_next1
 	CMP #$02 ; J
-	BNE game_display_next2
+	BNE tetra_display_next2
 	LDA #"J"
-	JMP game_display_exit
-game_display_next2
+	JMP tetra_display_exit
+tetra_display_next2
 	CMP #$03 ; L
-	BNE game_display_next3
+	BNE tetra_display_next3
 	LDA #"L"
-	JMP game_display_exit
-game_display_next3
+	JMP tetra_display_exit
+tetra_display_next3
 	CMP #$04 ; O
-	BNE game_display_next4
+	BNE tetra_display_next4
 	LDA #"O"
-	JMP game_display_exit
-game_display_next4
+	JMP tetra_display_exit
+tetra_display_next4
 	CMP #$05 ; S
-	BNE game_display_next5
+	BNE tetra_display_next5
 	LDA #"S"
-	JMP game_display_exit
-game_display_next5
+	JMP tetra_display_exit
+tetra_display_next5
 	CMP #$06 ; T
-	BNE game_display_next6
+	BNE tetra_display_next6
 	LDA #"T"
-	JMP game_display_exit
-game_display_next6
+	JMP tetra_display_exit
+tetra_display_next6
 	CMP #$07 ; Z
-	BNE game_display_next7
+	BNE tetra_display_next7
 	LDA #"Z"
-	JMP game_display_exit
-game_display_next7
+	JMP tetra_display_exit
+tetra_display_next7
 	NOP
-game_display_exit
+tetra_display_exit
 	JSR printchar
 
 	LDA #$3A
 	STA printchar_x
 	LDA #$68
 	STA printchar_y
-	LDA #"C"
-	JSR printchar
-	LDA #"t"
-	JSR printchar
-	LDA #"r"
-	JSR printchar
-	LDA #"l"
-	JSR printchar
-	LDA #"+"
-	JSR printchar
 	LDA #"F"
 	JSR printchar
-	LDA #"5"
+	LDA #"1"
+	JSR printchar
+	LDA #"2"
 	JSR printchar
 	LDA #$3A
 	STA printchar_x
@@ -1095,19 +1117,11 @@ game_display_exit
 	STA printchar_x
 	LDA #$70
 	STA printchar_y
+	LDA #"E"
+	JSR printchar
+	LDA #"S"
+	JSR printchar
 	LDA #"C"
-	JSR printchar
-	LDA #"t"
-	JSR printchar
-	LDA #"r"
-	JSR printchar
-	LDA #"l"
-	JSR printchar
-	LDA #"+"
-	JSR printchar
-	LDA #"F"
-	JSR printchar
-	LDA #"4"
 	JSR printchar
 	LDA #$3A
 	STA printchar_x
@@ -1327,7 +1341,7 @@ splash_tune_loop
 	BEQ splash_tune_loop
 	CMP #$1B ; escape
 	BEQ splash_exit
-	CMP #$1F ; F4
+	CMP #$16 ; F9
 	BEQ splash_easter_egg
 	CMP #$15 ; F12
 	BNE splash_tune_loop
@@ -1686,11 +1700,11 @@ credits_text
 	.BYTE ", BDD, B"
 	.BYTE "igEd, & "
 	.BYTE "gfoot"
-	.BYTE $0D
-	.BYTE "D.Murray"
-	.BYTE ", A.Blac"
-	.BYTE "k, & B.E"
-	.BYTE "ater",$0D
+;	.BYTE $0D
+;	.BYTE "D.Murray"
+;	.BYTE ", A.Blac"
+;	.BYTE "k, & B.E"
+;	.BYTE "ater",$0D
 	.BYTE $0D,$0D
 	.BYTE "John 3",$3A
 	.BYTE "16",$0D
@@ -2297,7 +2311,7 @@ tune_next4
 	LDA output_byte
 	AND #%01111111
 	STA output_byte
-	STA $C000				; writing to ROM will output bits
+	STA $FFFF				; writing to ROM will output bits
 	LDA command_addr4_low
 	AND #%00011111
 	TAX
@@ -2324,7 +2338,7 @@ tune_nop1
 	LDA output_byte
 	ORA #%10000000
 	STA output_byte
-	STA $C000
+	STA $FFFF
 tune_next6
 	LDA command_addr4_low
 	AND #%00011111
@@ -2361,35 +2375,887 @@ tune_next9
 
 	.ORG $E000
 
-extra
+intruder_player_pos		.EQU $0400 ; reusing memory location
+intruder_player_lives		.EQU $0401
+intruder_missile_pos_x		.EQU $0402
+intruder_missile_pos_y		.EQU $0403
+intruder_enemy_fall		.EQU $0404
+intruder_enemy_pos_x		.EQU $0405
+intruder_enemy_pos_y		.EQU $0406
+intruder_enemy_dir_x		.EQU $0407
+intruder_enemy_speed		.EQU $0408
+intruder_enemy_missile_s	.EQU $0409
+intruder_enemy_missile_x	.EQU $040A
+intruder_enemy_missile_y	.EQU $040B
+intruder_delay_timer		.EQU $040C
+intruder_button_left		.EQU $040D
+intruder_button_right		.EQU $040E
+intruder_button_fire		.EQU $040F
+intruder_mystery_pos		.EQU $0410
+intruder_mystery_speed		.EQU $0411
+intruder_points_low		.EQU $0412
+intruder_points_high		.EQU $0413
+intruder_level			.EQU $0414
+intruder_overall_delay		.EQU $0415
+intruder_mystery_bank		.EQU $0416
+; unused
+intruder_enemy_visible		.EQU $0420
+
+intruder_max_enemies		.EQU $2F ; $2F, a constant
+
+intruder_level_enemy_fall
+	.BYTE $10,$10,$30,$30,$50,$50,$70,$70
+intruder_level_enemy_speed
+	.BYTE $20,$40,$40,$60,$60,$80,$80,$A0
+intruder_level_enemy_missile_speed
+	.BYTE $02,$02,$03,$03,$04,$04,$04,$04
+intruder_level_overall_delay
+	.BYTE $80,$70,$60,$50,$40,$20,$10,$08
+
+intruder
+	LDA #$03
+	STA intruder_player_lives
+	STZ intruder_level
+	STZ intruder_points_low
+	STZ intruder_points_high
+	
+intruder_init_level
+	LDA intruder_level
+	AND #%00000111
+	TAX
+	LDA #$24
+	STA intruder_player_pos
+	STZ intruder_button_left
+	STZ intruder_button_right
+	STZ intruder_button_fire
+	STZ intruder_missile_pos_y
+	STZ intruder_delay_timer
+	LDA intruder_level_enemy_fall,X
+	STA intruder_enemy_fall
+	LDA #$08
+	STA intruder_enemy_pos_x
+	LDA #$18
+	STA intruder_enemy_pos_y
+	LDA intruder_level_enemy_speed,X
+	STA intruder_enemy_speed
+	LDA intruder_level_enemy_missile_speed,X
+	STA intruder_enemy_missile_s
+	LDA #$28
+	STA intruder_enemy_missile_x
+	STZ intruder_enemy_missile_y
+	LDA #$00
+	STA intruder_mystery_pos
+	LDA #$01
+	STA intruder_mystery_speed
+	LDA intruder_level_overall_delay,X
+	STA intruder_overall_delay
+	LDA #$FA ; 250 in decimal
+	STA intruder_mystery_bank ; total points you can get from the mystery ship each round
+
+intruder_init_start
+	STZ sub_write+1				; clear out screen RAM
+	LDA #$08
+	STA sub_write+2
+intruder_init_wipeout
+	LDA #$00 ; fill color
+	JSR sub_write
+	INC sub_write+1
+	BNE intruder_init_wipeout
+	INC sub_write+2
+	LDA sub_write+2
+	CMP #$80
+	BNE intruder_init_wipeout
+
+	JSR intruder_draw_menu
+
+	LDX #intruder_max_enemies
+	LDA #$FF
+intruder_init_visible_loop
+	STA intruder_enemy_visible,X
+	DEX
+	CPX #$FF
+	BNE intruder_init_visible_loop
+
+	LDA #$0C
+	JSR intruder_init_shield
+	LDA #$18
+	JSR intruder_init_shield
+	LDA #$24
+	JSR intruder_init_shield
+	LDA #$30
+	JSR intruder_init_shield
+	LDA #$3C
+	JSR intruder_init_shield
+
+	LDY #$00
+	JMP intruder_draw_mystery	
+
+intruder_input
+	LDX key_read
+	CPX key_write
+	BNE intruder_input_next
+	JMP intruder_input_check
+intruder_input_next
+	JSR basic_sub_random ; just to add randomness
+	LDA key_array,X
+	INC key_read
+	CMP #$F0
+	BEQ intruder_input_release
+	STA inputchar_value
+	LDA key_release
+	STZ key_release
+	BEQ intruder_input_down
+	LDA inputchar_value
+	CMP #ps2_escape
+	BEQ intruder_input_escape
+	CMP #ps2_f12
+	BEQ intruder_input_f12
+	CMP #ps2_arrow_left
+	BEQ intruder_input_left_up
+	CMP #$1C ; A
+	BEQ intruder_input_left_up
+	CMP #ps2_arrow_right
+	BEQ intruder_input_right_up
+	CMP #$23 ; D
+	BEq intruder_input_right_up
+	CMP #ps2_space
+	BEQ intruder_input_fire_up
+	CMP #ps2_arrow_up
+	BEQ intruder_input_fire_up
+	CMP #$1D ; W
+	BEQ intruder_input_fire_up
+	JMP intruder_input_check
+intruder_input_escape
+	LDA #$80 ; from main_start
+	JMP $FFE0 ; switch banks
+intruder_input_f12
+	JMP intruder
+intruder_input_release
+	STA key_release
+	JMP intruder_input_check
+intruder_input_down
+	LDA inputchar_value
+	CMP #ps2_arrow_left
+	BEQ intruder_input_left_down
+	CMP #$1C ; A
+	BEQ intruder_input_left_down
+	CMP #ps2_arrow_right
+	BEQ intruder_input_right_down
+	CMP #$23 ; D
+	BEQ intruder_input_right_down
+	CMP #ps2_space
+	BEQ intruder_input_fire_down
+	CMP #ps2_arrow_up
+	BEQ intruder_input_fire_down
+	CMP #$1D ; W
+	BEq intruder_input_fire_down
+	JMP intruder_input_check
+intruder_input_left_up
+	STZ intruder_button_left
+	JMP intruder_input_check
+intruder_input_right_up
+	STZ intruder_button_right
+	JMP intruder_input_check
+intruder_input_fire_up
+	STZ intruder_button_fire
+	JMP intruder_input_check
+intruder_input_left_down
+	STA intruder_button_left
+	JMP intruder_input_check
+intruder_input_right_down	
+	STA intruder_button_right
+	JMP intruder_input_check
+intruder_input_fire_down	
+	STA intruder_button_fire
+	JMP intruder_input_check
+intruder_input_check	
+	INY
+	CPY intruder_overall_delay
+	BEQ intruder_input_check_next
+	JMP intruder_input
+intruder_input_check_next
+	LDY #$00
+	DEC intruder_delay_timer
+	LDA intruder_delay_timer
+	AND #%00001111
+	BEQ intruder_reaction
+	JMP intruder_input
+intruder_reaction
+	LDA intruder_button_left
+	BEQ intruder_reaction_next1
+	LDA intruder_player_pos
+	SEC
+	SBC #$02
+	CLC
+	CMP #$08
+	BCC intruder_reaction_next1
+	STA intruder_player_pos
+intruder_reaction_next1
+	LDA intruder_button_right
+	BEQ intruder_reaction_next2
+	LDA intruder_player_pos
+	CLC
+	ADC #$02
+	CLC
+	CMP #$42
+	BCS intruder_reaction_next2
+	STA intruder_player_pos
+intruder_reaction_next2
+	LDA intruder_button_fire
+	BEQ intruder_reaction_next3
+	STZ intruder_button_fire
+	LDA intruder_missile_pos_y
+	BNE intruder_reaction_next3
+	LDA intruder_player_pos
+	CLC
+	ADC #$03
+	STA intruder_missile_pos_x
+	LDA #$72
+	STA intruder_missile_pos_y
+intruder_reaction_next3
+	NOP
 
 
-	LDA #$02
+intruder_draw_mystery
+	LDA intruder_mystery_pos
+	CMP #$FF
+	BEQ intruder_draw_player
+	CLC	
+	ADC intruder_mystery_speed
+	BMI intruder_draw_mystery_offscreen
+	CLC	
+	CMP #$50
+	BCS intruder_draw_mystery_offscreen
+	JMP intruder_draw_mystery_onscreen
+intruder_draw_mystery_offscreen
+	LDA #$FF
+	STA intruder_mystery_pos
+	JSR intruder_mystery_clear
+	JMP intruder_draw_player
+intruder_draw_mystery_onscreen
+	STA intruder_mystery_pos
+	STA sub_write+1
+	LDA #$10
+	STA sub_write+2
+	LDA #<intruder_mystery_data
+	STA sub_index+1
+	LDA #>intruder_mystery_data
+	STA sub_index+2
+	LDX #$00
+	LDY #$00
+intruder_draw_mystery_loop
+	JSR sub_index
+	JSR sub_write
+	INC sub_write+1
+	INX
+	INY
+	CPY #$08
+	BNE intruder_draw_mystery_loop
+	LDY #$00
+	LDA sub_write+1
+	CLC
+	ADC #$78
+	STA sub_write+1
+	BCC intruder_draw_mystery_loop
+	INC sub_write+2
+	LDA sub_write+2
+	CMP #$14
+	BCC intruder_draw_mystery_loop
+
+
+intruder_draw_player
+	LDA intruder_player_pos
+	STA sub_write+1
+	LDA #$76
+	STA sub_write+2
+	LDA #<intruder_player_data
+	STA sub_index+1
+	LDA #>intruder_player_data
+	STA sub_index+2
+	LDX #$00
+	LDY #$00
+intruder_draw_player_loop
+	JSR sub_index
+	JSR sub_write
+	INC sub_write+1
+	INX
+	INY
+	CPY #$08
+	BNE intruder_draw_player_loop
+	LDY #$00
+	LDA sub_write+1
+	CLC
+	ADC #$78
+	STA sub_write+1
+	BCC intruder_draw_player_loop
+	INC sub_write+2
+	LDA sub_write+2
+	CMP #$7A
+	BCC intruder_draw_player_loop
+	LDA intruder_missile_pos_y
+	BNE intruder_draw_missile
+	
+	LDX #$FF
+	LDY #$18
+intruder_draw_no_missile
+	NOP
+	DEX
+	BNE intruder_draw_no_missile
+	DEY
+	BNE intruder_draw_no_missile
+
+	JMP intruder_draw_enemy_missile
+intruder_draw_missile
+	LDA intruder_missile_pos_x
+	STA sub_write+1
+	LDA intruder_missile_pos_y
+	STA sub_write+2
+	JSR intruder_draw_missile_particle_clear
+	LDA intruder_missile_pos_y
+	SEC
+	SBC #$04
+	CLC	
+	CMP #$08
+	BCS intruder_draw_missile_normal
+	JMP intruder_draw_missile_reset
+intruder_draw_missile_normal
+	STA intruder_missile_pos_y
+
+
+	LDA intruder_missile_pos_y
+	CLC	
+	CMP #$10
+	BCC intruder_draw_missile_mystery_skip
+	CLC
+	CMP #$14
+	BCS intruder_draw_missile_mystery_skip
+	LDA intruder_missile_pos_x
+	CLC
+	CMP intruder_mystery_pos
+	BCC intruder_draw_missile_mystery_skip
+	SEC
+	SBC #$08
+	CMP intruder_mystery_pos
+	BCS intruder_draw_missile_mystery_skip
+	LDA #$FF
+	STA intruder_mystery_pos ; hit the mystery ship!
+	JSR intruder_mystery_clear
+
+	LDA #$41
 	STA printchar_x
 	LDA #$0C
 	STA printchar_y
-	LDA #"4"
-	JSR printchar
-	LDA #"K"
-	JSR printchar
-	LDA #"B"
-	JSR printchar
 	LDA #" "
 	JSR printchar
-	LDA #"E"
 	JSR printchar
-	LDA #"x"
+	JSR printchar
+	JSR printchar
+	JSR printchar
+	JSR printchar
+	LDA intruder_mystery_bank ; only 250 points available each level
+	BEQ intruder_draw_missile_mystery_skip
+	SEC
+	SBC #$32
+	STA intruder_mystery_bank
+	LDA #$32 ; 50 in decimal
+	CLC
+	ADC intruder_points_low
+	STA intruder_points_low ; increment points
+	CLC
+	CMP #$64 ; 100 in decimal
+	BCC intruder_draw_missile_mystery_skip
+	SEC
+	SBC #$64
+	STA intruder_points_low
+	INC intruder_points_high
+	LDA intruder_points_high
+	AND #%00000011 ; every 400 points is new life
+	BNE intruder_draw_missile_mystery_skip
+	LDA intruder_player_lives
+	AND #%00001111
+	CLC
+	CMP #$09
+	BCS intruder_draw_missile_mystery_skip
+	INC intruder_player_lives
+intruder_draw_missile_mystery_skip
+	JSR intruder_draw_menu
+
+	LDX #intruder_max_enemies
+intruder_draw_missile_array
+	LDA intruder_enemy_visible,X
+	BNE intruder_draw_missile_check
+	JMP intruder_draw_missile_loop
+intruder_draw_missile_check
+	TXA
+	AND #%11111000
+	EOR #$FF
+	INC A
+	ADC intruder_missile_pos_y
+	CLC
+	CMP intruder_enemy_pos_y
+	BCS intruder_draw_missile_check_next1
+	JMP intruder_draw_missile_loop
+intruder_draw_missile_check_next1
+	SEC
+	SBC #$04
+	CLC
+	CMP intruder_enemy_pos_y
+	BCC intruder_draw_missile_check_next2
+	JMP intruder_draw_missile_loop
+intruder_draw_missile_check_next2
+	TXA
+	AND #%00000111
+	CLC
+	ROL A
+	ROL A
+	ROL A
+	EOR #$FF
+	INC A
+	ADC intruder_missile_pos_x
+	CLC
+	CMP intruder_enemy_pos_x
+	BCS intruder_draw_missile_check_next3
+	JMP intruder_draw_missile_loop
+intruder_draw_missile_check_next3
+	SEC
+	SBC #$05
+	CLC
+	CMP intruder_enemy_pos_x
+	BCC intruder_draw_missile_check_next4
+	JMP intruder_draw_missile_loop
+intruder_draw_missile_check_next4
+	LDA #$80	
+	STA intruder_enemy_visible,X ; hit enemy
+	STZ intruder_missile_pos_y
+
+	LDA #$41
+	STA printchar_x
+	LDA #$0C
+	STA printchar_y
+	LDA #" "
+	JSR printchar
+	JSR printchar
+	JSR printchar
+	JSR printchar
+	JSR printchar
+	JSR printchar
+	TXA
+	AND #%11111000
+	CLC
+	ROR A
+	ROR A
+	ROR A
+	EOR #$FF
+	DEC A
+	AND #%00000111
+	CLC
+	ADC intruder_points_low
+	STA intruder_points_low ; increment points
+	CLC
+	CMP #$64 ; 100 in decimal
+	BCC intruder_draw_missile_points
+	SEC
+	SBC #$64
+	STA intruder_points_low
+	INC intruder_points_high
+	LDA intruder_points_high
+	AND #%00000011 ; every 400 points is new life
+	BNE intruder_draw_missile_points
+	LDA intruder_player_lives
+	AND #%00001111
+	CLC
+	CMP #$09
+	BCS intruder_draw_missile_points
+	INC intruder_player_lives
+intruder_draw_missile_points
+	JSR intruder_draw_menu
+
+	PHX
+	LDX #intruder_max_enemies
+intruder_draw_missile_win_loop
+	LDA intruder_enemy_visible,X
+	AND #%01111111
+	BNE intruder_draw_missile_win_fail
+	DEX
+	CPX #$FF
+	BNE intruder_draw_missile_win_loop
+	PLX
+	JMP intruder_nextlevel ; won the game!
+intruder_draw_missile_win_fail
+	PLX
+intruder_draw_missile_loop
+	DEX
+	CPX #$FF
+	BEQ intruder_draw_missile_flying
+	JMP intruder_draw_missile_array
+intruder_draw_missile_flying
+	LDA intruder_missile_pos_y
+	BNE intruder_draw_missile_flying_next1
+	JMP intruder_draw_enemy_missile
+intruder_draw_missile_flying_next1
+	LDA intruder_missile_pos_x
+	STA sub_write+1
+	LDA intruder_missile_pos_y
+	STA sub_write+2
+	PHY
+	LDY #$FF
+	JSR intruder_draw_missile_particle_color
+	PLY
+	CPX #$00
+	BNE intruder_draw_missile_flying_next2
+	JMP intruder_draw_enemy_missile
+intruder_draw_missile_flying_next2
+	LDA intruder_missile_pos_x
+	STA sub_write+1
+	LDA intruder_missile_pos_y
+	STA sub_write+2
+	JSR intruder_draw_missile_particle_clear
+intruder_draw_missile_reset
+	STZ intruder_missile_pos_y
+
+	JSR intruder_draw_menu
+
+intruder_draw_enemy_missile
+	LDA intruder_enemy_missile_y
+	BEQ intruder_draw_enemy_missile_skip
+	LDA intruder_enemy_missile_x
+	STA sub_write+1
+	LDA intruder_enemy_missile_y
+	STA sub_write+2
+	JSR intruder_draw_missile_particle_clear
+	LDA intruder_enemy_missile_y
+	BEQ intruder_draw_enemy_missile_skip
+	JMP intruder_draw_enemy_missile_ready
+intruder_draw_enemy_missile_skip
+	LDA intruder_delay_timer
+	CLC
+	CMP intruder_enemy_speed 
+	BCC intruder_draw_enemy_missile_timed
+	JMP intruder_draw_enemy
+intruder_draw_enemy_missile_timed
+	LDA intruder_enemy_fall
+	EOR #$FF
+	STA intruder_enemy_fall
+	CLC
+	JSR basic_sub_random
+	AND intruder_enemy_speed
+	AND #%11110000
+	PHA
+	LDA intruder_enemy_fall
+	EOR #$FF
+	STA intruder_enemy_fall
+	PLA
+	BEQ intruder_draw_enemy_missile_search
+	JMP intruder_draw_enemy
+intruder_draw_enemy_missile_search
+
+
+	LDA intruder_mystery_pos
+	CMP #$FF
+	BNE intruder_draw_mystery_skip
+	CLC
+	JSR basic_sub_random
+	AND #%00001111
+	BNE intruder_draw_mystery_skip
+	STZ intruder_mystery_pos
+	LDA #$01
+	STA intruder_mystery_speed
+	LDA intruder_level
+	CLC
+	CMP #$04
+	BCC intruder_draw_mystery_next
+	LDA #$02
+	STA intruder_mystery_speed
+intruder_draw_mystery_next
+	CLC
+	JSR basic_sub_random
+	AND #%10000000
+	BEQ intruder_draw_mystery_skip
+	LDA #$4F
+	STA intruder_mystery_pos
+	LDA #$FF
+	STA intruder_mystery_speed
+	LDA intruder_level
+	CLC
+	CMP #$04
+	BCC intruder_draw_mystery_skip
+	LDA #$FE
+	STA intruder_mystery_speed
+intruder_draw_mystery_skip
+
+
+	CLC
+	JSR basic_sub_random
+	AND #%11111100
+	CLC
+	ROR A
+	ROR A
+	CLC
+	CMP #$30
+	BCS intruder_draw_enemy_missile_search
+	TAX
+	LDA intruder_enemy_visible,X
+	BEQ intruder_draw_enemy_missile_search	
+	TXA
+	AND #%00000111
+	CLC
+	ROL A
+	ROL A
+	ROL A
+	ADC intruder_enemy_pos_x
+	ADC #$02
+	STA intruder_enemy_missile_x
+	TXA
+	AND #%11111000
+	ADC intruder_enemy_pos_y
+	CLC
+	ADC #$04
+	STA intruder_enemy_missile_y
+intruder_draw_enemy_missile_ready
+	LDA intruder_enemy_missile_s
+	CLC
+	ADC intruder_enemy_missile_y
+	CLC
+	CMP #$80
+	BCS intruder_draw_enemy_missile_miss
+	STA intruder_enemy_missile_y
+	CLC
+	CMP #$76
+	BCC intruder_draw_enemy_missile_normal	
+	LDA intruder_enemy_missile_x
+	SEC
+	SBC #$01
+	CLC
+	CMP intruder_player_pos
+	BCC intruder_draw_enemy_missile_normal
+	SEC
+	SBC #$05
+	CMP intruder_player_pos
+	BCS intruder_draw_enemy_missile_normal
+	DEC intruder_player_lives ; got hit!
+
+	JSR intruder_draw_menu
+
+	LDA intruder_player_lives
+	AND #%00001111
+	BNE intruder_draw_enemy_missile_miss
+	JMP intruder_gameover
+intruder_draw_enemy_missile_normal
+	LDA intruder_enemy_missile_x
+	STA sub_write+1
+	LDA intruder_enemy_missile_y
+	STA sub_write+2
+	PHY
+	LDY #$55
+	JSR intruder_draw_missile_particle_color
+	PLY
+	CPX #$00
+	BEQ intruder_draw_enemy
+	LDA intruder_enemy_missile_x
+	STA sub_write+1
+	LDA intruder_enemy_missile_y
+	STA sub_write+2
+	JSR intruder_draw_missile_particle_clear
+intruder_draw_enemy_missile_miss
+	STZ intruder_enemy_missile_y
+intruder_draw_enemy
+	LDX #intruder_max_enemies
+intruder_draw_enemy_array
+	LDA intruder_enemy_visible,X
+	BNE intruder_draw_enemy_visible
+	JMP intruder_draw_enemy_loop
+intruder_draw_enemy_visible
+	CMP #$80
+	BNE intruder_draw_enemy_full
+	JSR intruder_draw_enemy_clear
+	STZ intruder_enemy_visible,X
+	JMP intruder_draw_enemy_loop
+intruder_draw_enemy_full
+	PHX
+	TXA
+	AND #%00000111
+	CLC
+	ROL A
+	ROL A
+	ROL A
+	ADC intruder_enemy_pos_x
+	STA sub_write+1
+	TXA
+	AND #%11111000
+	ADC intruder_enemy_pos_y
+	STA sub_write+2
+	LDA intruder_level
+	AND #%00000001
+	BEQ intruder_draw_enemy_pic2
+	LDA intruder_enemy_pos_x
+	AND #%00000001
+	BEQ intruder_draw_enemy_pic1
+	LDA #<intruder_enemy_data1
+	STA sub_index+1
+	LDA #>intruder_enemy_data1
+	STA sub_index+2
+	JMP intruder_draw_enemy_pic_done
+intruder_draw_enemy_pic1
+	LDA #<intruder_enemy_data2
+	STA sub_index+1
+	LDA #>intruder_enemy_data2
+	STA sub_index+2
+	JMP intruder_draw_enemy_pic_done
+intruder_draw_enemy_pic2
+	LDA intruder_enemy_pos_x
+	AND #%00000001
+	BEQ intruder_draw_enemy_pic3
+	LDA #<intruder_enemy_data3
+	STA sub_index+1
+	LDA #>intruder_enemy_data3
+	STA sub_index+2
+	JMP intruder_draw_enemy_pic_done
+intruder_draw_enemy_pic3
+	LDA #<intruder_enemy_data4
+	STA sub_index+1
+	LDA #>intruder_enemy_data4
+	STA sub_index+2
+intruder_draw_enemy_pic_done
+	LDX #$00
+	LDY #$00
+	PHY
+intruder_draw_enemy_visible_loop
+	JSR sub_index
+	JSR sub_write
+	INC sub_write+1
+	INX
+	INY
+	CPY #$06
+	BNE intruder_draw_enemy_visible_loop
+	LDY #$00
+	LDA sub_write+1
+	CLC
+	ADC #$7A
+	STA sub_write+1
+	BCC intruder_draw_enemy_visible_loop
+	INC sub_write+2
+	LDA sub_write+2
+	CLC
+	CMP #$72
+	BCC intruder_draw_enemy_visible_continue ; too far down!
+	JMP intruder_gameover
+intruder_draw_enemy_visible_continue
+	PLA
+	INC A
+	CMP #$03
+	PHA
+	BNE intruder_draw_enemy_visible_loop
+	PLA
+	PLX
+intruder_draw_enemy_loop
+	DEX
+	CPX #$FF
+	BEQ intruder_draw_enemy_move
+	JMP intruder_draw_enemy_array
+intruder_draw_enemy_move
+	LDA intruder_delay_timer
+	CLC
+	CMP intruder_enemy_speed 
+	BCC intruder_draw_enemy_ready
+	JMP intruder_loop
+intruder_draw_enemy_ready
+	STZ intruder_delay_timer
+	LDA intruder_enemy_pos_y
+	AND #%00000001
+	BEQ intruder_draw_enemy_back
+	LDA #$01
+	JMP intruder_draw_enemy_shift
+intruder_draw_enemy_back
+	LDA #$FF
+intruder_draw_enemy_shift
+	CLC
+	ADC intruder_enemy_pos_x
+	STA intruder_enemy_pos_x
+	CLC
+	CMP #$0E
+	BCS intruder_draw_enemy_down
+	CLC
+	CMP #$04
+	BCC intruder_draw_enemy_down
+	JMP intruder_loop
+intruder_draw_enemy_down
+	LDX #intruder_max_enemies
+intruder_draw_enemy_down_clear
+	LDA intruder_enemy_visible,X
+	BEQ intruder_draw_enemy_down_skip
+	JSR intruder_draw_enemy_clear
+intruder_draw_enemy_down_skip
+	DEX
+	CPX #$FF
+	BNE intruder_draw_enemy_down_clear
+	LDA intruder_enemy_fall
+	CLC
+	ROR A
+	ROR A
+	ROR A
+	ROR A 
+	CLC
+	ADC intruder_enemy_pos_y
+	STA intruder_enemy_pos_y
+intruder_loop
+	JMP intruder_input
+
+
+intruder_draw_menu
+	LDA #$04
+	STA printchar_x
+	LDA #$0C
+	STA printchar_y
+	LDA intruder_player_lives
+	AND #%00001111
+	CLC
+	ADC #"0"
+	JSR printchar
+	LDA #$1E
+	STA printchar_x
+	LDA #$0C
+	STA printchar_y
+	LDA #"I"
+	JSR printchar
+	LDA #"n"
 	JSR printchar
 	LDA #"t"
 	JSR printchar
 	LDA #"r"
 	JSR printchar
-	LDA #"a"
+	LDA #"u"
 	JSR printchar
-	
-	LDA #$02
+	LDA #"d"
+	JSR printchar
+	LDA #"e"
+	JSR printchar
+	LDA #"r"
+	JSR printchar
+	LDA #"s"
+	JSR printchar
+	LDA #$41
 	STA printchar_x
-	LDA #$10
+	LDA #$0C
+	STA printchar_y
+	LDX intruder_points_high
+	LDA decimal_conversion_high,X
+	JSR printchar
+	LDA decimal_conversion_middle,X
+	JSR printchar
+	LDA decimal_conversion_low,X
+	JSR printchar
+	LDX intruder_points_low
+	LDA decimal_conversion_middle,X
+	JSR printchar
+	LDA decimal_conversion_low,X
+	JSR printchar
+	RTS
+
+
+intruder_gameover
+	LDA #$1E
+	STA printchar_x
+	LDA #$0C
 	STA printchar_y
 	LDA #"E"
 	JSR printchar
@@ -2399,38 +3265,588 @@ extra
 	JSR printchar
 	LDA #" "
 	JSR printchar
-	LDA #"t"
-	JSR printchar
 	LDA #"o"
+	JSR printchar
+	LDA #"r"
+	JSR printchar
+	LDA #" "
+	JSR printchar
+	LDA #"F"
+	JSR printchar
+	LDA #"1"
+	JSR printchar
+	LDA #"2"
+	JSR printchar
+intruder_gameover_loop
+	JSR inputchar
+	CMP #$00
+	BEQ intruder_gameover_loop
+	CMP #$1B ; escape
+	BEQ intruder_gameover_exit
+	CMP #$15 ; F12
+	BNE intruder_gameover_loop
+	JMP intruder
+intruder_gameover_exit
+	LDA #$80 ; from main_start
+	JMP $FFE0 ; switch banks
+
+intruder_nextlevel
+	LDA #$1E
+	STA printchar_x
+	LDA #$0C
+	STA printchar_y
+	LDA #"P"
+	JSR printchar
+	LDA #"r"
+	JSR printchar
+	LDA #"e"
+	JSR printchar
+	LDA #"s"
+	JSR printchar
+	LDA #"s"
 	JSR printchar
 	LDA #" "
 	JSR printchar
 	LDA #"E"
 	JSR printchar
-	LDA #"x"
-	JSR printchar
-	LDA #"i"
+	LDA #"n"
 	JSR printchar
 	LDA #"t"
 	JSR printchar
-	
-extra_loop
+	LDA #"e"
+	JSR printchar
+	LDA #"r"
+	JSR printchar
+intruder_nextlevel_loop
 	JSR inputchar
-	CMP #$00
-	BEQ extra_loop
-	CMP #$1B
-	BEQ extra_exit
-	JMP extra_loop
+	CMP #$0D ; enter
+	BNE intruder_nextlevel_loop
+	INC intruder_level
+	JMP intruder_init_level
+	
 
-extra_exit
-	LDA #$80 ; from main_start
-	JMP $FFE0 ; switch banks
+intruder_mystery_clear
+	LDX #$00
+intruder_draw_mystery_clear1
+	STZ $1000,X
+	INX
+	BNE intruder_draw_mystery_clear1
+intruder_draw_mystery_clear2
+	STZ $1100,X
+	INX
+	BNE intruder_draw_mystery_clear2
+intruder_draw_mystery_clear3
+	STZ $1200,X
+	INX
+	BNE intruder_draw_mystery_clear3
+intruder_draw_mystery_clear4
+	STZ $1300,X
+	INX
+	BNE intruder_draw_mystery_clear4
+	RTS
+
+intruder_draw_missile_particle_clear ; sub_write already populated!
+	LDA sub_write+1
+	PHA
+	LDA #$00
+	JSR intruder_draw_missile_particle_write
+	LDA sub_write+1
+	CLC
+	ADC #$7F
+	STA sub_write+1
+	LDA #$00
+	JSR intruder_draw_missile_particle_write
+	PLA
+	PHA
+	STA sub_write+1
+	INC sub_write+2
+	LDA #$00
+	JSR intruder_draw_missile_particle_write
+	LDA sub_write+1
+	CLC
+	ADC #$7F
+	STA sub_write+1
+	LDA #$00
+	JSR intruder_draw_missile_particle_write
+	PLA
+	PHA
+	STA sub_write+1
+	INC sub_write+2
+	LDA #$00
+	JSR intruder_draw_missile_particle_write
+	LDA sub_write+1
+	CLC
+	ADC #$7F
+	STA sub_write+1
+	LDA #$00
+	JSR intruder_draw_missile_particle_write
+	PLA
+	PHA
+	STA sub_write+1
+	INC sub_write+2
+	LDA #$00
+	JSR intruder_draw_missile_particle_write
+	LDA sub_write+1
+	CLC
+	ADC #$7F
+	STA sub_write+1
+	LDA #$00
+	JSR intruder_draw_missile_particle_write
+	PLA
+	RTS
+
+intruder_draw_missile_particle_write
+	JSR sub_write
+	INC sub_write+1
+	JSR sub_write
+	RTS
+
+intruder_draw_missile_particle_color ; sub_write already populated! Y has color	
+	LDX #$00
+	LDA sub_write+1
+	PHA
+	STA sub_read+1
+	LDA sub_write+2
+	STA sub_read+2
+	JSR sub_read
+	AND #%10101010
+	BEQ intruder_draw_missile_particle_color_next1
+	JSR sub_read
+	AND #%01010101
+	BNE intruder_draw_missile_particle_color_next1
+	INX
+intruder_draw_missile_particle_color_next1
+	TYA
+	AND #%00000011
+	JSR sub_write
+	INC sub_write+1
+	INC sub_read+1
+	JSR sub_read
+	AND #%10101010
+	BEQ intruder_draw_missile_particle_color_next2
+	JSR sub_read
+	AND #%01010101
+	BNE intruder_draw_missile_particle_color_next2
+	INX
+intruder_draw_missile_particle_color_next2
+	TYA
+	AND #%11000000
+	JSR sub_write
+	LDA sub_write+1
+	CLC
+	ADC #$7F
+	STA sub_write+1
+	STA sub_read+1
+	JSR sub_read
+	AND #%10101010
+	BEQ intruder_draw_missile_particle_color_next3
+	JSR sub_read
+	AND #%01010101
+	BNE intruder_draw_missile_particle_color_next3
+	INX
+intruder_draw_missile_particle_color_next3
+	TYA
+	AND #%00000011
+	JSR sub_write
+	INC sub_write+1
+	INC sub_read+1
+	JSR sub_read
+	AND #%10101010
+	BEQ intruder_draw_missile_particle_color_next4
+	JSR sub_read
+	AND #%01010101
+	BNE intruder_draw_missile_particle_color_next4
+	INX
+intruder_draw_missile_particle_color_next4
+	TYA
+	AND #%11000000
+	JSR sub_write
+	PLA
+	PHA
+	STA sub_write+1
+	STA sub_read+1
+	INC sub_write+2
+	INC sub_read+2
+	JSR sub_read
+	AND #%10101010
+	BEQ intruder_draw_missile_particle_color_next5
+	JSR sub_read
+	AND #%01010101
+	BNE intruder_draw_missile_particle_color_next5
+	INX
+intruder_draw_missile_particle_color_next5
+	TYA
+	AND #%00000011
+	JSR sub_write
+	INC sub_write+1
+	INC sub_read+1
+	JSR sub_read
+	AND #%10101010
+	BEQ intruder_draw_missile_particle_color_next6
+	JSR sub_read
+	AND #%01010101
+	BNE intruder_draw_missile_particle_color_next6
+	INX
+intruder_draw_missile_particle_color_next6
+	TYA
+	AND #%11000000
+	JSR sub_write
+	LDA sub_write+1
+	CLC
+	ADC #$7F
+	STA sub_write+1
+	STA sub_read+1
+	JSR sub_read
+	AND #%10101010
+	BEQ intruder_draw_missile_particle_color_next7
+	JSR sub_read
+	AND #%01010101
+	BNE intruder_draw_missile_particle_color_next7
+	INX
+intruder_draw_missile_particle_color_next7
+	TYA
+	AND #%00000011
+	JSR sub_write
+	INC sub_write+1
+	INC sub_read+1
+	JSR sub_read
+	AND #%10101010
+	BEQ intruder_draw_missile_particle_color_next8
+	JSR sub_read
+	AND #%01010101
+	BNE intruder_draw_missile_particle_color_next8
+	INX
+intruder_draw_missile_particle_color_next8
+	TYA
+	AND #%11000000
+	JSR sub_write
+	PLA
+	PHA
+	STA sub_write+1
+	STA sub_read+1
+	INC sub_write+2
+	INC sub_read+2
+	JSR sub_read
+	AND #%10101010
+	BEQ intruder_draw_missile_particle_color_next9
+	JSR sub_read
+	AND #%01010101
+	BNE intruder_draw_missile_particle_color_next9
+	INX
+intruder_draw_missile_particle_color_next9
+	TYA
+	AND #%00000011
+	JSR sub_write
+	INC sub_write+1
+	INC sub_read+1
+	JSR sub_read
+	AND #%10101010
+	BEQ intruder_draw_missile_particle_color_next10
+	JSR sub_read
+	AND #%01010101
+	BNE intruder_draw_missile_particle_color_next10
+	INX
+intruder_draw_missile_particle_color_next10
+	TYA
+	AND #%11000000
+	JSR sub_write
+	LDA sub_write+1
+	CLC
+	ADC #$7F
+	STA sub_write+1
+	STA sub_read+1
+	JSR sub_read
+	AND #%10101010
+	BEQ intruder_draw_missile_particle_color_next11
+	JSR sub_read
+	AND #%01010101
+	BNE intruder_draw_missile_particle_color_next11
+	INX
+intruder_draw_missile_particle_color_next11
+	TYA
+	AND #%00000011
+	JSR sub_write
+	INC sub_write+1
+	INC sub_read+1
+	JSR sub_read
+	AND #%10101010
+	BEQ intruder_draw_missile_particle_color_next12
+	JSR sub_read
+	AND #%01010101
+	BNE intruder_draw_missile_particle_color_next12
+	INX
+intruder_draw_missile_particle_color_next12
+	TYA
+	AND #%11000000
+	JSR sub_write
+	PLA
+	PHA
+	STA sub_write+1
+	STA sub_read+1
+	INC sub_write+2
+	INC sub_read+2
+	JSR sub_read
+	AND #%10101010
+	BEQ intruder_draw_missile_particle_color_next13
+	JSR sub_read
+	AND #%01010101
+	BNE intruder_draw_missile_particle_color_next13
+	INX
+intruder_draw_missile_particle_color_next13
+	TYA
+	AND #%00000011
+	JSR sub_write
+	INC sub_write+1
+	INC sub_read+1
+	JSR sub_read
+	AND #%10101010
+	BEQ intruder_draw_missile_particle_color_next14
+	JSR sub_read
+	AND #%01010101
+	BNE intruder_draw_missile_particle_color_next14
+	INX
+intruder_draw_missile_particle_color_next14
+	TYA
+	AND #%11000000
+	JSR sub_write
+	LDA sub_write+1
+	CLC
+	ADC #$7F
+	STA sub_write+1
+	STA sub_read+1
+	JSR sub_read
+	AND #%10101010
+	BEQ intruder_draw_missile_particle_color_next15
+	JSR sub_read
+	AND #%01010101
+	BNE intruder_draw_missile_particle_color_next15
+	INX
+intruder_draw_missile_particle_color_next15
+	TYA
+	AND #%00000011
+	JSR sub_write
+	INC sub_write+1
+	INC sub_read+1
+	JSR sub_read
+	AND #%10101010
+	BEQ intruder_draw_missile_particle_color_next16
+	JSR sub_read
+	AND #%01010101
+	BNE intruder_draw_missile_particle_color_next16
+	INX
+intruder_draw_missile_particle_color_next16
+	TYA
+	AND #%11000000
+	JSR sub_write
+	PLA
+	RTS
+
+intruder_draw_enemy_clear ; X already populated
+	PHX
+	TXA
+	AND #%00000111
+	CLC
+	ROL A
+	ROL A
+	ROL A
+	ADC intruder_enemy_pos_x
+	STA sub_write+1
+	TXA
+	AND #%11111000
+	ADC intruder_enemy_pos_y
+	STA sub_write+2
+	LDX #$00
+	LDY #$00
+	PHY
+intruder_draw_enemy_clear_loop
+	LDA #$00
+	JSR sub_write
+	INC sub_write+1
+	INX
+	INY
+	CPY #$06
+	BNE intruder_draw_enemy_clear_loop
+	LDY #$00
+	LDA sub_write+1
+	CLC
+	ADC #$7A
+	STA sub_write+1
+	BCC intruder_draw_enemy_clear_loop
+	INC sub_write+2
+	PLA
+	INC A
+	CMP #$03
+	PHA
+	BNE intruder_draw_enemy_clear_loop
+	PLA
+	PLX
+	RTS
+
+intruder_init_shield ; A has horizontal position
+	STA sub_write+1
+	LDA #$6C
+	STA sub_write+2
+	LDA #<intruder_shield_data
+	STA sub_index+1
+	LDA #>intruder_shield_data
+	STA sub_index+2
+	LDX #$00
+	LDY #$00
+intruder_init_shield_loop
+	JSR sub_index
+	JSR sub_write
+	INC sub_write+1
+	INX
+	INY
+	CPY #$08
+	BNE intruder_init_shield_loop
+	LDY #$00
+	LDA sub_write+1
+	CLC
+	ADC #$78
+	STA sub_write+1
+	BCC intruder_init_shield_loop
+	INC sub_write+2
+	LDA sub_write+2
+	CMP #$72
+	BCC intruder_init_shield_loop
+	RTS
+
+intruder_player_data
+	.BYTE $00,$00,$00,$03,$C0,$00,$00,$00
+	.BYTE $00,$00,$00,$0F,$F0,$00,$00,$00
+	.BYTE $00,$00,$03,$FF,$FF,$C0,$00,$00
+	.BYTE $00,$00,$3F,$FF,$FF,$FC,$00,$00
+	.BYTE $00,$00,$FF,$FF,$FF,$FF,$00,$00
+	.BYTE $00,$00,$FF,$FF,$FF,$FF,$00,$00
+	.BYTE $00,$00,$FF,$FF,$FF,$FF,$00,$00
+	.BYTE $00,$00,$FF,$FF,$FF,$FF,$00,$00
+
+intruder_shield_data
+	.BYTE $00,$00,$AA,$AA,$AA,$AA,$00,$00
+	.BYTE $00,$AA,$AA,$AA,$AA,$AA,$AA,$00
+	.BYTE $AA,$AA,$AA,$AA,$AA,$AA,$AA,$AA
+	.BYTE $AA,$AA,$AA,$AA,$AA,$AA,$AA,$AA
+	.BYTE $AA,$AA,$AA,$AA,$AA,$AA,$AA,$AA
+	.BYTE $AA,$AA,$AA,$AA,$AA,$AA,$AA,$AA
+	.BYTE $AA,$AA,$AA,$AA,$AA,$AA,$AA,$AA
+	.BYTE $AA,$AA,$AA,$AA,$AA,$AA,$AA,$AA
+	.BYTE $AA,$AA,$AA,$AA,$AA,$AA,$AA,$AA
+	.BYTE $AA,$AA,$AA,$AA,$AA,$AA,$AA,$AA
+	.BYTE $AA,$AA,$AA,$AA,$AA,$AA,$AA,$AA
+	.BYTE $AA,$AA,$AA,$00,$00,$AA,$AA,$AA
+
+intruder_mystery_data
+	.BYTE $00,$00,$FF,$00,$00,$FF,$00,$00
+	.BYTE $00,$00,$03,$C0,$03,$C0,$00,$00
+	.BYTE $00,$00,$00,$FF,$FF,$00,$00,$00
+	.BYTE $00,$00,$3F,$FF,$FF,$FC,$00,$00
+	.BYTE $00,$00,$FF,$3F,$FC,$FF,$00,$00
+	.BYTE $00,$00,$FF,$FF,$FF,$FF,$00,$00
+	.BYTE $00,$00,$3F,$FF,$FF,$FC,$00,$00
+	.BYTE $00,$00,$00,$FF,$FF,$00,$00,$00
+
+intruder_enemy_data1
+	.BYTE $00,$00,$55,$55,$00,$00
+	.BYTE $00,$05,$55,$55,$50,$00
+	.BYTE $00,$55,$00,$00,$55,$00
+	.BYTE $00,$05,$55,$55,$50,$00
+	.BYTE $00,$00,$50,$05,$00,$00
+	.BYTE $00,$55,$50,$05,$55,$00
+
+intruder_enemy_data2
+	.BYTE $00,$05,$55,$55,$50,$00
+	.BYTE $00,$55,$00,$00,$55,$00
+	.BYTE $00,$05,$55,$55,$50,$00
+	.BYTE $00,$00,$55,$55,$00,$00
+	.BYTE $00,$00,$50,$05,$00,$00
+	.BYTE $00,$05,$50,$05,$50,$00
+
+intruder_enemy_data3
+	.BYTE $00,$05,$50,$05,$50,$00
+	.BYTE $00,$50,$55,$55,$05,$00
+	.BYTE $00,$00,$50,$05,$00,$00
+	.BYTE $00,$55,$55,$55,$55,$00
+	.BYTE $00,$55,$50,$05,$55,$00
+	.BYTE $00,$50,$00,$00,$05,$00
+
+intruder_enemy_data4
+	.BYTE $00,$55,$50,$05,$55,$00
+	.BYTE $00,$00,$55,$55,$00,$00
+	.BYTE $00,$00,$50,$05,$00,$00
+	.BYTE $00,$05,$55,$55,$50,$00
+	.BYTE $00,$55,$50,$05,$55,$00
+	.BYTE $00,$05,$50,$05,$50,$00
+
+
+
+;	LDA #$02
+;	STA printchar_x
+;	LDA #$0C
+;	STA printchar_y
+;	LDA #"4"
+;	JSR printchar
+;	LDA #"K"
+;	JSR printchar
+;	LDA #"B"
+;	JSR printchar
+;	LDA #" "
+;	JSR printchar
+;	LDA #"E"
+;	JSR printchar
+;	LDA #"x"
+;	JSR printchar
+;	LDA #"t"
+;	JSR printchar
+;	LDA #"r"
+;	JSR printchar
+;	LDA #"a"
+;	JSR printchar
+;	
+;	LDA #$02
+;	STA printchar_x
+;	LDA #$10
+;	STA printchar_y
+;	LDA #"E"
+;	JSR printchar
+;	LDA #"S"
+;	JSR printchar
+;	LDA #"C"
+;	JSR printchar
+;	LDA #" "
+;	JSR printchar
+;	LDA #"t"
+;	JSR printchar
+;	LDA #"o"
+;	JSR printchar
+;	LDA #" "
+;	JSR printchar
+;	LDA #"E"
+;	JSR printchar
+;	LDA #"x"
+;	JSR printchar
+;	LDA #"i"
+;	JSR printchar
+;	LDA #"t"
+;	JSR printchar
+;	
+;intruder_loop
+;	JSR inputchar
+;	CMP #$00
+;	BEQ intruder_loop
+;	CMP #$1B
+;	BEQ intruder_exit
+;	JMP intruder_loop
+;
+;intruder_exit
+;	LDA #$80 ; from main_start
+;	JMP $FFE0 ; switch banks
 
 
 	.ORG $F000
 
 	
-game_piece_data_first
+tetra_piece_data_first
 	.BYTE $00,$00,$00,$00
 	.BYTE $00,$00,$00,$00
 	.BYTE $00,$00,$00,$00
@@ -2511,7 +3927,7 @@ game_piece_data_first
 	.BYTE $00,$00,$FF,$00
 	.BYTE $00,$00,$FF,$00
 
-game_piece_data_second
+tetra_piece_data_second
 	.BYTE $00,$00,$00,$00
 	.BYTE $00,$FF,$FF,$00
 	.BYTE $00,$FF,$FF,$00
@@ -2595,21 +4011,21 @@ game_piece_data_second
 	
 ; these convert hex values into decimal values for printing
 ; converting user decimal values into hex is done with code
-; leading zeros are omitted by printing $00 (which does nothing)
+; leading zeros are NOT omitted
 decimal_conversion_high
-	.BYTE $00,$00,$00,$00,$00,$00,$00,$00
-	.BYTE $00,$00,$00,$00,$00,$00,$00,$00
-	.BYTE $00,$00,$00,$00,$00,$00,$00,$00
-	.BYTE $00,$00,$00,$00,$00,$00,$00,$00
-	.BYTE $00,$00,$00,$00,$00,$00,$00,$00
-	.BYTE $00,$00,$00,$00,$00,$00,$00,$00
-	.BYTE $00,$00,$00,$00,$00,$00,$00,$00
-	.BYTE $00,$00,$00,$00,$00,$00,$00,$00
-	.BYTE $00,$00,$00,$00,$00,$00,$00,$00
-	.BYTE $00,$00,$00,$00,$00,$00,$00,$00
-	.BYTE $00,$00,$00,$00,$00,$00,$00,$00
-	.BYTE $00,$00,$00,$00,$00,$00,$00,$00
-	.BYTE $00,$00,$00,$00,"1111"
+	.BYTE "00000000"
+	.BYTE "00000000"
+	.BYTE "00000000"
+	.BYTE "00000000"
+	.BYTE "00000000"
+	.BYTE "00000000"
+	.BYTE "00000000"
+	.BYTE "00000000"
+	.BYTE "00000000"
+	.BYTE "00000000"
+	.BYTE "00000000"
+	.BYTE "00000000"
+	.BYTE "00001111"
 	.BYTE "11111111"
 	.BYTE "11111111"
 	.BYTE "11111111"
@@ -2631,8 +4047,8 @@ decimal_conversion_high
 	.BYTE "22222222"
 
 decimal_conversion_middle
-	.BYTE $00,$00,$00,$00,$00,$00,$00,$00
-	.BYTE $00,$00,"111111"
+	.BYTE "00000000"
+	.BYTE "00111111"
 	.BYTE "11112222"
 	.BYTE "22222233"
 	.BYTE "33333333"
@@ -2708,8 +4124,8 @@ decimal_conversion_low
 ; the first 128 bytes are without shift/extended
 ; the second 128 bytes are with shift/extended
 ascii_lookup
-	.BYTE $00,$07,$0F,$0C,$1E,$1C,$1D,$15
-	.BYTE $00,$16,$18,$0E,$1F,$09,$60,$00
+	.BYTE $00,$16,$0F,$0C,$1E,$1C,$1D,$15
+	.BYTE $00,$18,$07,$0E,$1F,$09,$60,$00
 	.BYTE $00,$00,$00,$00,$00,$71,$31,$00
 	.BYTE $00,$00,$7A,$73,$61,$77,$32,$00
 	.BYTE $00,$63,$78,$64,$65,$34,$33,$00
@@ -2725,8 +4141,8 @@ ascii_lookup
 	.BYTE $30,$2E,$32,$35,$36,$38,$1B,$00
 	.BYTE $19,$2B,$33,$2D,$2A,$39,$00,$00
 
-	.BYTE $00,$07,$0F,$0C,$1E,$1C,$1D,$15
-	.BYTE $00,$16,$00,$0E,$1F,$09,$7E,$00
+	.BYTE $00,$16,$0F,$0C,$1E,$1C,$1D,$15
+	.BYTE $00,$18,$07,$0E,$1F,$09,$7E,$00
 	.BYTE $00,$00,$00,$00,$00,$51,$21,$00
 	.BYTE $00,$00,$5A,$53,$41,$57,$40,$00
 	.BYTE $00,$43,$58,$44,$45,$24,$23,$00
@@ -3536,7 +4952,7 @@ vector_nmi_first		; 1
 	.ORG $FFF0
 
 bank_switch
-	STA $C000
+	STA $FFFF
 	NOP ; just to be safe
 	BMI $FFE5 ; needs to be kept short
 	JMP vector_reset

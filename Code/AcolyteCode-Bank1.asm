@@ -50,6 +50,12 @@
 ; D5 = BANK-B
 ; D6 = BANK-C
 ; D7 = AUDIO-OUT
+; Writing to ROM also writes to RAM if the RAM is fast enough.
+; This is not a problem when using the 128KB RAM, but when using
+; only 32KB of RAM, it would show anything written to ROM in 
+; the RAM space given.  So, when writing to ROM for output,
+; make sure to write to $FFFF which is off-screen and is not 
+; expected to be used.
 
 ; Input is through interrupts and /SO
 ; /IRQ = KEY-CLK
@@ -260,14 +266,14 @@ zero_loop
 	STZ key_speed
 
 ;	LDA #%00011100		; set output pins
-;	STA $C000
+;	STA $FFFF
 
 ;	LDA #%01111111		; clears interrupt flags
 ;	STA via_ifr
 ;	STZ via_ier
 
 ;	LDA #%10011100		; set output pins
-;	STA $C000
+;	STA $FFFF
 
 ;	LDA #%01111111		; clears interrupt flags
 ;	STA via_ifr
@@ -277,7 +283,7 @@ zero_loop
 
 	LDA #%00011100		; set output pins
 	STA output_byte
-	STA $C000
+	STA $FFFF
 
 	LDA #$4C ; JMPa			; mini-jump tables for printchar and inputchar
 	STA jump_printchar+0		; so that it is easier to use those while programming
@@ -399,18 +405,7 @@ random_code
 random_exit
 
 
-	STZ sub_write+1				; clear out all system and screen RAM 
-	LDA #$04
-	STA sub_write+2
-wipeout_loop1
-	LDA #$55 ; border color
-	JSR sub_write
-	INC sub_write+1
-	BNE wipeout_loop1
-	INC sub_write+2
-	LDA sub_write+2
-	CMP #$80
-	BNE wipeout_loop1
+main_screen
 
 	PLA					; grab accumulator
 	AND #%10000000				; only clear if told to
@@ -435,11 +430,24 @@ wipeout_loop2
 	LDA output_byte				; change RAM bank (if connected such)
 	EOR #%10000000
 	STA output_byte
-	STA $C000
+	STA $FFFF
 	AND #%10000000
 	BNE main_clear
 
 main_start
+
+	STZ sub_write+1				; clear out all system and screen RAM 
+	LDA #$04
+	STA sub_write+2
+wipeout_loop1
+	LDA #$55 ; border color
+	JSR sub_write
+	INC sub_write+1
+	BNE wipeout_loop1
+	INC sub_write+2
+	LDA sub_write+2
+	CMP #$80
+	BNE wipeout_loop1
 
 	STZ command_mode			; start in scratchpad mode
 	STZ printchar_invert
@@ -524,18 +532,18 @@ main_help_text
 	.BYTE "l",$3A,$0D
 	.BYTE "F1=Scrat"
 	.BYTE "chpad   "
-	.BYTE "F9=Reset"
+	.BYTE "F9=Tetra"
 	.BYTE $0D
 	.BYTE "F2=Monit"
 	.BYTE "or      "
-	.BYTE "F10=SDca"
-	.BYTE "rd",$0D
+	.BYTE "F10=Intr"
+	.BYTE "uders",$0D
 	.BYTE "F3=BASIC"
 	.BYTE "        "
-	.BYTE "F11=Extr"
-	.BYTE "a",$0D
-	.BYTE "F4=Tetra"
-	.BYTE " Game   "
+	.BYTE "F11=SDca"
+	.BYTE "rd",$0D
+	.BYTE "F4=RAM B"
+	.BYTE "ank     "
 	.BYTE "F12=Help"
 	.BYTE $0D
 	.BYTE "F5=Clear"
@@ -546,14 +554,14 @@ main_help_text
 	.BYTE " 6502 CP"
 	.BYTE "U"
 	.BYTE $0D
-	.BYTE "F7=Bell "
+	.BYTE "F7=Reset"
 	.BYTE "        "
 	.BYTE "64K RAM "
 	.BYTE "& 32K RO"
 	.BYTE "M"
 	.BYTE $0D
-	.BYTE "F8=RAM B"
-	.BYTE "ank     "
+	.BYTE "F8=Bell "
+	.BYTE "        "
 	.BYTE "VGA, PS/"
 	.BYTE "2, & Aud"
 	.BYTE "io"
@@ -1906,7 +1914,7 @@ spi_base_enable
 	LDA output_byte
 	AND spi_cs_enable			; this enables only whatever CS lines were designated in spi_cs_enable
 	STA output_byte
-	STA $C000 ; write to ROM sends to output
+	STA $FFFF ; write to ROM sends to output
 	PLA
 	RTS
 
@@ -1919,7 +1927,7 @@ spi_base_disable
 	LDA output_byte
 	ORA spi_cs_enable
 	STA output_byte
-	STA $C000
+	STA $FFFF
 	LDA spi_cs_enable
 	EOR #$FF
 	STA spi_cs_enable
@@ -1927,7 +1935,7 @@ spi_base_disable
 	;LDA output_byte
 	;ORA #%10001100				; this disables ALL SPI modules
 	;STA output_byte
-	;STA $C000 ; write to ROM sends to output
+	;STA $FFFF ; write to ROM sends to output
 
 	PLA
 	RTS
@@ -1937,11 +1945,11 @@ spi_base_send_zero
 	AND spi_cs_enable
 	AND #%11111100				; already enabled, send zero on MOSI
 	STA output_byte
-	STA $C000 ; write to ROM sends to output
+	STA $FFFF ; write to ROM sends to output
 	INC A					; INC/DEC to trigger the clock
-	STA $C000
+	STA $FFFF
 	DEC A
-	STA $C000
+	STA $FFFF
 	RTS
 
 spi_base_send_one
@@ -1950,11 +1958,11 @@ spi_base_send_one
 	AND #%11111100				; already enabled, send one on MOSI
 	ORA #%00000010
 	STA output_byte
-	STA $C000 ; write to ROM sends to output
+	STA $FFFF ; write to ROM sends to output
 	INC A					; INC/DEC to trigger the clock
-	STA $C000
+	STA $FFFF
 	DEC A
-	STA $C000
+	STA $FFFF
 	RTS
 
 spi_base_send_byte
@@ -1993,9 +2001,9 @@ spi_base_receive_bit_clock
 	PHA
 	LDA output_byte
 	INC A					; INC/DEC to trigger the clock
-	STA $C000
+	STA $FFFF
 	DEC A
-	STA $C000
+	STA $FFFF
 	PLA
 	RTS
 
@@ -2054,15 +2062,15 @@ spi_base_pump					; this pumps the clock a lot while everything is disabled
 	LDA output_byte				; both CS and MOSI must be high to work!!!
 	ORA #%00001110
 	STA output_byte
-	STA $C000 ; write to ROM sends to output				
+	STA $FFFF ; write to ROM sends to output				
 	JSR spi_base_longdelay			; delay
 	LDX #$50
 spi_base_pump_loop				; pump sclk 80 times while sdcard is disabled
 	LDA output_byte
 	INC A
-	STA $C000
+	STA $FFFF
 	DEC A
-	STA $C000
+	STA $FFFF
 	DEX
 	BNE spi_base_pump_loop
 	PLX
@@ -4576,8 +4584,8 @@ ascii_key_high
 ; the first 128 bytes are without shift/extended
 ; the second 128 bytes are with shift/extended
 ascii_lookup
-	.BYTE $00,$16,$07,$0C,$1E,$1C,$1D,$15
-	.BYTE $00,$18,$0F,$0E,$1F,$09,$60,$00
+	.BYTE $00,$16,$0F,$0C,$1E,$1C,$1D,$15
+	.BYTE $00,$18,$07,$0E,$1F,$09,$60,$00
 	.BYTE $00,$00,$00,$00,$00,$71,$31,$00
 	.BYTE $00,$00,$7A,$73,$61,$77,$32,$00
 	.BYTE $00,$63,$78,$64,$65,$34,$33,$00
@@ -4593,8 +4601,8 @@ ascii_lookup
 	.BYTE $30,$2E,$32,$35,$36,$38,$1B,$00
 	.BYTE $19,$2B,$33,$2D,$2A,$39,$00,$00
 
-	.BYTE $00,$16,$07,$0C,$1E,$1C,$1D,$15
-	.BYTE $00,$18,$0F,$0E,$1F,$09,$7E,$00
+	.BYTE $00,$16,$0F,$0C,$1E,$1C,$1D,$15
+	.BYTE $00,$18,$07,$0E,$1F,$09,$7E,$00
 	.BYTE $00,$00,$00,$00,$00,$51,$21,$00
 	.BYTE $00,$00,$5A,$53,$41,$57,$40,$00
 	.BYTE $00,$43,$58,$44,$45,$24,$23,$00
@@ -5060,7 +5068,7 @@ printchar_return_shift
 	STA printchar_y
 	JMP printchar_linefeed_start
 printchar_continue9
-	CMP #$0F ; shift out (F8), now for RAM bank
+	CMP #$1F ; (F4), now for RAM bank
 	BNE printchar_continue10
 	LDA key_alt_control
 	BEQ printchar_continue10
@@ -5072,7 +5080,7 @@ printchar_continue9
 	LDA output_byte
 	EOR #%00100000 ; change RAM bank
 	STA output_byte
-	STA $C000
+	STA $FFFF
 	LDX #$FF
 	LDY #$FF
 printchar_ram_delay ; this adds an artificial delay
@@ -5157,19 +5165,13 @@ printchar_continue14
 	BNE printchar_continue15
 	JMP printchar_tab
 printchar_continue15
-	CMP #$19 ; extra content (F11)
+	CMP #$18 ; other game (F10)
 	BNE printchar_continue16
 	LDA key_alt_control
 	BEQ printchar_continue16
-	LDA #$E8
-	STA command_addr4_low
-	LDA #$FF
-	STA command_addr4_high
-	LDA #$19
-	JSR soft_jump ; jump to $FFE8
-	JMP printchar_exit
+	JMP $FFE8 ; location to switch to other game
 printchar_continue16
-	CMP #$16 ;  soft reset (F9)
+	CMP #$0F ;  shift out, soft reset (F9)
 	BNE printchar_continue17
 	LDA key_alt_control
 	BEQ printchar_continue17
@@ -5179,7 +5181,7 @@ printchar_continue16
 	;LDA #$FF
 	LDA #>vector_reset
 	STA command_addr4_high
-	LDA #$16
+	LDA #$0F
 	JSR soft_jump ; jump to 'vector_reset'
 	JMP printchar_exit
 printchar_continue17
@@ -5244,13 +5246,13 @@ printchar_basic_array
 	JSR printchar
 	JMP printchar_exit
 printchar_continue21
-	CMP #$1F ; unit sep (F4, game)
+	CMP #$16 ; unit sep (F9, game)
 	BNE printchar_continue22
 	LDA key_alt_control
 	BEQ printchar_continue22
 	JMP $FFE0 ; location to switch to game
 printchar_continue22
-	CMP #$18 ; cancel (F10, load SDcard)
+	CMP #$19 ; cancel (F11, load SDcard)
 	BNE printchar_continue23
 	LDA key_alt_control
 	BEQ printchar_continue23
@@ -5258,7 +5260,7 @@ printchar_continue22
 	STA command_addr4_low
 	LDA #>sdcard
 	STA command_addr4_high
-	LDA #$18
+	LDA #$19
 	JSR soft_jump
 	JMP printchar_exit
 printchar_continue23
@@ -6020,9 +6022,9 @@ soft_jump_loop
 	LDA key_alt_control
 	BEQ soft_jump_exit
 	LDA inputchar_value
-	CMP #$18 ; SDcard
+	CMP #$19 ; SDcard
 	BEQ soft_jump_sdcard
-	CMP #$16 ; reset
+	CMP #$0F ; reset
 	BEQ soft_jump_reset
 	LDA #%00001110 ; used for reset???
 	JMP (command_addr4_low) ; $FFF0 to bank switch, others possible now
@@ -6050,13 +6052,13 @@ bell_loop
 	LDA output_byte
 	EOR #%10000000
 	STA output_byte
-	STA $C000 ; write to ROM for output
+	STA $FFFF ; write to ROM for output
 	DEY
 	BNE bell_loop
 	PLA
 	EOR #%10000000 ; bell actually changes RAM banks (if connected such)
 	STA output_byte
-	STA $C000
+	STA $FFFF
 	PLY
 	PLX
 	PLA
@@ -6391,7 +6393,7 @@ vector_nmi_first		; 1
 	.ORG $FFF0
 
 bank_switch
-	STA $C000
+	STA $FFFF
 	NOP ; just to be safe
 	JMP vector_reset
 
