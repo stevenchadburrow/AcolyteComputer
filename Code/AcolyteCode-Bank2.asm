@@ -194,19 +194,9 @@ basic_X			.EQU $8D00
 basic_Y			.EQU $8E00
 basic_Z			.EQU $8F00
 basic_code		.EQU $9000
-basic_code_end		.EQU $BEFF
-basic_code_error	.EQU $BF00 ; one past
+basic_code_end		.EQU $BFFF
+basic_code_error	.EQU $C000 ; one past
 
-; unused I/O space from $BF00 to $BF7F
-
-via			.EQU $BF80 ; for via expansion, duplicated for whole page
-via_pb			.EQU via+$00
-via_pa			.EQU via+$01
-via_db			.EQU via+$02
-via_da			.EQU via+$03
-via_pcr			.EQU via+$0C
-via_ifr			.EQU via+$0D
-via_ier			.EQU via+$0E
 
 
 ; the start of code

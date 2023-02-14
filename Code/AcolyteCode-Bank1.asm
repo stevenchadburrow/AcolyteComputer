@@ -215,18 +215,9 @@ basic_X			.EQU $8D00
 basic_Y			.EQU $8E00
 basic_Z			.EQU $8F00
 basic_code		.EQU $9000
-basic_code_end		.EQU $BEFF
-basic_code_error	.EQU $BF00 ; one past
+basic_code_end		.EQU $BFFF
+basic_code_error	.EQU $C000 ; one past
 
-
-via			.EQU $BF80 ; for via expansion, duplicated for half page
-via_pb			.EQU via+$00
-via_pa			.EQU via+$01
-via_db			.EQU via+$02
-via_da			.EQU via+$03
-via_pcr			.EQU via+$0C
-via_ifr			.EQU via+$0D
-via_ier			.EQU via+$0E
 
 
 ; the start of code
@@ -424,14 +415,14 @@ wipeout_loop2
 	BNE wipeout_loop2
 	INC sub_write+2
 	LDA sub_write+2
-	CMP #$BF 				; leave last page alone (for VIA expansion)
+	CMP #$C0 
 	BNE wipeout_loop2
 
 	LDA output_byte				; change RAM bank (if connected such)
-	EOR #%10000000
+	EOR #%00100000
 	STA output_byte
 	STA $FFFF
-	AND #%10000000
+	AND #%00100000
 	BNE main_clear
 
 main_start
