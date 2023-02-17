@@ -1,4 +1,4 @@
-# Acolyte6502Computer
+# AcolyteComputer
 Acolyte 6502 "Homebrew" Computer
 
 Runs a W65C02 Microprocessor at 3.14 MHz.
