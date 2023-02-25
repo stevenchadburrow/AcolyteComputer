@@ -5694,7 +5694,9 @@ sdcard_display_loop
 	CPX #$12
 	BNE sdcard_display_loop
 
+	STZ sdcard_memory
 	PLX ; was A, where we start on SDcard
+sdcard_retry
 	LDA #$00
 	JSR spi_sdcard_init
 	CMP #$00 ; needed
@@ -5720,6 +5722,10 @@ sdcard_display_loop
 sdcard_error
 	LDA #$0D ; carriage return
 	JSR printchar
+	LDA sdcard_memory
+	DEC sdcard_memory
+	CMP #$00 ; needed
+	BEQ sdcard_retry
 ;	LDA #"E"
 ;	JSR printchar
 ;	LDA #"S"
