@@ -917,11 +917,15 @@ monitor_function11
 monitor_function12
 	CMP #$0B ; write to EEPROM
 	BNE monitor_function13
+	JSR spi_eeprom_read_status
+	; do something with status byte here?
 	JSR spi_eeprom_write
 	JMP monitor_exit
 monitor_function13
 	CMP #$0C ; read from EEPROM
 	BNE monitor_function14
+	JSR spi_eeprom_read_status
+	; do something with status byte here?
 	JSR spi_eeprom_read
 	JMP monitor_exit
 monitor_function14
@@ -1858,7 +1862,28 @@ monitor_memhelp_text
 	.BYTE $FF
 
 
-
+spi_eeprom_read_status
+	JSR spi_base_disable			; disable
+	JSR spi_base_delay			; delay
+	JSR spi_base_enable			; enable
+	LDA #%00000101 				; read status command
+	JSR spi_base_send_byte
+	JSR spi_base_receive_byte		; receive data byte
+	PHA
+	JSR spi_base_disable			; disable
+	LDX #$80				; arbitrary amount of wait time
+spi_eeprom_read_status_loop
+	JSR spi_base_longdelay			; delay
+	TXA
+	AND #%00001111
+	BNE spi_eeprom_read_status_increment
+	LDA #"."
+	JSR printchar
+spi_eeprom_read_status_increment
+	DEX
+	BNE spi_eeprom_read_status_loop
+	PLA
+	RTS
 
 
 ; spi_base_delay sub-routine
@@ -1903,6 +1928,7 @@ spi_base_longdelay_loop
 spi_base_enable
 	PHA
 	LDA output_byte
+	ORA #%00001100
 	AND spi_cs_enable			; this enables only whatever CS lines were designated in spi_cs_enable
 	STA output_byte
 	STA $FFFF ; write to ROM sends to output
@@ -1912,21 +1938,21 @@ spi_base_enable
 spi_base_disable
 	PHA
 
-	LDA spi_cs_enable
-	EOR #$FF
-	STA spi_cs_enable
-	LDA output_byte
-	ORA spi_cs_enable
-	STA output_byte
-	STA $FFFF
-	LDA spi_cs_enable
-	EOR #$FF
-	STA spi_cs_enable
+;	LDA spi_cs_enable
+;	EOR #$FF
+;	STA spi_cs_enable
+;	LDA output_byte
+;	ORA spi_cs_enable
+;	STA output_byte
+;	STA $FFFF
+;	LDA spi_cs_enable
+;	EOR #$FF
+;	STA spi_cs_enable
 
-	;LDA output_byte
-	;ORA #%10001100				; this disables ALL SPI modules
-	;STA output_byte
-	;STA $FFFF ; write to ROM sends to output
+	LDA output_byte
+	ORA #%00001100				; this disables ALL SPI modules
+	STA output_byte
+	STA $FFFF ; write to ROM sends to output
 
 	PLA
 	RTS
