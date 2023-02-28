@@ -15,7 +15,7 @@
 1x 74HC02,,DIP-14,,NOR2 U16
 1x MCP130xD,,TO-92,,Reset U17
 1x 25LCx,,DIP-8,,EEPROM U18
-1x PN2222A,,TO-92,,Transistor Q1
+3x PN2222A,,TO-92,,"Trans. Q1,2,3"
 ,,,,
 "Capacitors, Diodes, Resistors:",,,,
 1x 100uF,,5mm Rad,,Electro C1
@@ -26,7 +26,7 @@
 1x 1KΩ,,1/4W 5%,,LED Resistor
 2x 15KΩ,,1/4W 5%,,Resistor
 6x 10KΩ,,1/4W 5%,,Resistor
-4x 3.3KΩ,,1/4W 5%,,Resistor
+5x 3.3KΩ,,1/4W 5%,,Resistor
 1x 2.4KΩ,,1/4W 5%,,Resistor
 1x 1.5KΩ,,1/4W 5%,,Resistor
 1x 750Ω,,1/4W 5%,,Resistor
