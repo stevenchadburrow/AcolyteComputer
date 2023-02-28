@@ -675,16 +675,12 @@ monitor_continue14
 	BNE monitor_continue15
 	LDA #$0B
 	STA command_function
-	LDA #%11111011				; says we are trying to work with SPI-EEPROM, that is D2 is low, the rest are high
-	STA spi_cs_enable
 	JMP monitor_loop
 monitor_continue15
 	CMP #"R" ; read from EEPROM
 	BNE monitor_continue16
 	LDA #$0C
 	STA command_function
-	LDA #%11111011				; says we are trying to work with SPI-EEPROM, that is D2 is low, the rest are high
-	STA spi_cs_enable
 	JMP monitor_loop
 monitor_continue16
 	CMP #"@" ; assembly instruction
@@ -917,15 +913,16 @@ monitor_function11
 monitor_function12
 	CMP #$0B ; write to EEPROM
 	BNE monitor_function13
-	JSR spi_eeprom_read_status
-	; do something with status byte here?
+	LDA #%11111011				; says we are trying to work with SPI-EEPROM, that is D2 is low, the rest are high
+	STA spi_cs_enable
 	JSR spi_eeprom_write
 	JMP monitor_exit
 monitor_function13
 	CMP #$0C ; read from EEPROM
 	BNE monitor_function14
-	JSR spi_eeprom_read_status
-	; do something with status byte here?
+	JSR spi_base_miso_clear ; probably not needed anymore
+	LDA #%11111011				; says we are trying to work with SPI-EEPROM, that is D2 is low, the rest are high
+	STA spi_cs_enable
 	JSR spi_eeprom_read
 	JMP monitor_exit
 monitor_function14
@@ -1862,27 +1859,25 @@ monitor_memhelp_text
 	.BYTE $FF
 
 
-spi_eeprom_read_status
-	JSR spi_base_disable			; disable
-	JSR spi_base_delay			; delay
-	JSR spi_base_enable			; enable
-	LDA #%00000101 				; read status command
-	JSR spi_base_send_byte
-	JSR spi_base_receive_byte		; receive data byte
-	PHA
-	JSR spi_base_disable			; disable
-	LDX #$80				; arbitrary amount of wait time
-spi_eeprom_read_status_loop
-	JSR spi_base_longdelay			; delay
-	TXA
-	AND #%00001111
-	BNE spi_eeprom_read_status_increment
-	LDA #"."
-	JSR printchar
-spi_eeprom_read_status_increment
+; clears the SDcard from the MISO line
+; but isn't really needed anymore??
+spi_base_miso_clear
+	JSR spi_base_disable
+	JSR spi_base_longdelay
+	LDX #$08
+spi_base_miso_clear_loop
+	LDA output_byte
+	AND #%11111110
+	STA $FFFF
+	INC A
+	STA $FFFF
 	DEX
-	BNE spi_eeprom_read_status_loop
-	PLA
+	BNE spi_base_miso_clear_loop
+	LDA output_byte
+	AND #%11111110
+	STA output_byte
+	STA $FFFF
+	JSR spi_base_longdelay
 	RTS
 
 
@@ -5894,7 +5889,7 @@ spi_sdcard_init_continue8
 	JMP spi_sdcard_init_acmd41
 spi_sdcard_init_continue9
 	JSR spi_base_longdelay			; delay
-	JMP spi_sdcard_init_exit		; at this point, it is initialized, good!
+	JMP spi_sdcard_exit_normal		; at this point, it is initialized, good!
 spi_sdcard_init_error
 	PHA
 	LDA #"?"				; if errors, print exclamation mark where cursor used to be
@@ -5904,16 +5899,7 @@ spi_sdcard_init_error
 	JSR printchar
 	LDA ascii_key_low,X
 	JSR printchar
-	PLY
-	PLX
-	PLA
-	EOR #$FF				; just make A not equal to what it started with
-	RTS					; to indicate an error occured
-spi_sdcard_init_exit
-	PLY
-	PLX
-	PLA
-	RTS
+	JMP spi_sdcard_exit_error
 
 
 ; spi_sdcard_read sub-routine
@@ -6008,7 +5994,7 @@ spi_sdcard_read_loop2_inc
 	JSR spi_base_receive_byte		; I *think* we read two more bytes, but ignore?
 	JSR spi_base_receive_byte		
 	JSR spi_base_disable			; disable
-	JMP spi_sdcard_read_exit		; exit cleanly
+	JMP spi_sdcard_exit_normal		; exit cleanly
 spi_sdcard_read_error
 	PHA
 	LDA #"?"				; if errors, print exclamation mark where cursor used to be
@@ -6018,12 +6004,13 @@ spi_sdcard_read_error
 	JSR printchar
 	LDA ascii_key_low,X
 	JSR printchar
+spi_sdcard_exit_error
 	PLY
 	PLX
 	PLA
 	EOR #$FF				; just make A not equal to what it started with
-	RTS					; to indicate an error occured
-spi_sdcard_read_exit
+	RTS	
+spi_sdcard_exit_normal
 	PLY
 	PLX
 	PLA
