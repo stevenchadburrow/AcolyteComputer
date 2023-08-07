@@ -1,7 +1,7 @@
 # AcolyteComputer
 Acolyte 6502 "Homebrew" Computer
 
-<img src="/Pictures/AcolyteBoard-Front-Edited.png">
+<img src="/Pictures/Acolyte.jpg">
 
 Runs a W65C02 Microprocessor at 3.14 MHz.
 Has 64K SRAM and 32K FlashROM.
